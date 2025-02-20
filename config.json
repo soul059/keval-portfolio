@@ -16,20 +16,29 @@
   "repoLink": "https://github.com/soul059/keval-portfolio",
   "social": {
     "email": "keval.s.chauhan.1@gmail.com",
-    "github": "https://github.com/soul059",
-    "linkedin": "www.linkedin.com/in/keval-s-chauhan"
+    "github": "soul059",
+    "linkedin": "keval-s-chauhan"
   },
-  "aboutGreeting": "Hi stranger. Welcome to keval's portfolio.",
+  "aboutGreeting": [
+  "Hi stranger. Welcome to keval's portfolio.",
+  "I'm a web developer who's really passionate about creating awesome digital experiences.",
+  "I love collaborating with other creative people to bring ideas to life."
+],
   "projects": [
     [
-      "GofeR",
-      "Vue.js reactivity in Go.",
-      "https://github.com/nasan016/gofer"
+      "Hi chat",
+      "an web chat application.",
+      "https://github.com/soul059/Hi-Chat-backend"
     ],
     [
-      "WebShell",
-      "Terminal styled website.",
-      "https://github.com/nasan016/webshell"
+      "soulblog",
+      "bloging website.",
+      "https://github.com/soul059/React-blog-webapp"
+    ],
+    [
+      "timeZ",
+      "a time zone converter react native project.",
+      "https://github.com/soul059/timeZ"
     ]
   ],
   "colors": {

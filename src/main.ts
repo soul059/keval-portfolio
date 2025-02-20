@@ -32,6 +32,7 @@ const COMMANDS = ["help", "about", "projects", "whoami", "repo", "banner", "clea
 const HISTORY : string[] = [];
 const SUDO_PASSWORD = command.password;
 const REPO_LINK = command.repoLink;
+const SOCIAL = command.social;
 
 const scrollToBottom = () => {
   const MAIN = document.getElementById("main");
@@ -231,10 +232,16 @@ function commandHandler(input : string) {
       }, 500);
       break;
     case 'linkedin':
-      //add stuff here
+      writeLines(["Redirecting to github.com...", "<br>"]);
+      setTimeout(() => {
+        window.open(`//https://www.linkedin.com/in/${SOCIAL.linkedin}`, '_blank');
+      }, 500);
       break;
     case 'github':
-      //add stuff here
+      writeLines(["Redirecting to github.com...", "<br>"]);
+      setTimeout(() => {
+        window.open(`https://github.com/${SOCIAL.github}`, '_blank');
+      }, 500);
       break;
     case 'email':
       //add stuff here
@@ -276,7 +283,7 @@ function commandHandler(input : string) {
       if (isSudo) {
         writeLines(["src", "<br>"]);
       } else {
-        writeLines(["Permission not granted.", "<br>"]);
+        writeLines(["Permission not granted.","You need to be Super User", "<br>"]);
       }
       break;
     default:

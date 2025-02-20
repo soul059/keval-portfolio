@@ -25,7 +25,12 @@ const helpObj = {
     [
       "'clear'",
       "Clear the terminal."
-    ]
+    ],
+    [
+      "'ls'",
+      "List directory contents."
+    ],
+    
   ],
 }
 
