@@ -1,0 +1,58 @@
+{
+  "ascii": [
+"    ▄▄",
+"    ▀███                                  ▀███",
+"      ██                                    ██",
+"      ██  ▄██▀  ▄▄█▀██▀██▀   ▀██▀ ▄█▀██▄    ██",
+"      ██ ▄█    ▄█▀   ██ ██   ▄█  ██   ██    ██",
+"      ██▄██    ██▀▀▀▀▀▀  ██ ▄█    ▄█████    ██",
+"      ██ ▀██▄  ██▄    ▄   ███    ██   ██    ██",
+"    ▄████▄ ██▄▄ ▀█████▀    █     ▀████▀██▄▄████▄"
+  ],
+  "title": "WebShell",
+  "username": "visitor",
+  "hostname": "keval",
+  "password": "keval",
+  "repoLink": "https://github.com/soul059/keval's-portfolio",
+  "social": {
+    "email": "keval.s.chauhan.1@gmail.com",
+    "github": "https://github.com/soul059",
+    "linkedin": "www.linkedin.com/in/keval-s-chauhan"
+  },
+  "aboutGreeting": "Hi stranger. Welcome to keval's portfolio.",
+  "projects": [
+    [
+      "GofeR",
+      "Vue.js reactivity in Go.",
+      "https://github.com/nasan016/gofer"
+    ],
+    [
+      "WebShell",
+      "Terminal styled website.",
+      "https://github.com/nasan016/webshell"
+    ]
+  ],
+  "colors": {
+    "background": "#002b36",
+    "foreground": "#F8DDE5",
+    "banner": "#FF9951",
+    "border": {
+      "visible": true,
+      "color": "#A3CCBE"
+    },
+    "prompt": {
+      "default": "#268bd2",
+      "user": "#FE6BC9",
+      "host": "#70FDFF",
+      "input": "#98E5A5"
+    },
+    "link": {
+      "text": "#B6AAEE",
+      "highlightColor": "#8ae234",
+      "highlightText": "#555753"
+    },
+    "commands": {
+      "textColor": "#98E5A5"
+    }
+  }
+}
