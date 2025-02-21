@@ -5,6 +5,10 @@ const helpObj = {
     "Who made this website?",
     ],
     [
+      "education",
+      "What did I study?"
+    ],
+    [
       "'projects'",
       "Maybe there's something interesting."
     ],

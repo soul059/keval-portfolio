@@ -24,6 +24,28 @@
   "I'm a web developer who's really passionate about creating awesome digital experiences.",
   "I love collaborating with other creative people to bring ideas to life."
 ],
+"education":[
+  [
+    "B.Tech in Information Technology",
+    "Dharmsinh Desai University | Nadiad",
+    "2023 - 2027"
+  ],
+  [
+    "Higher Secondary School",
+    "Dream international school | Dhoraji",
+    "2021 - 2023"
+  ],
+  [
+    "Secondary School",
+    "Mother Teresa School | Jam-Jodhpur",
+    "2019 - 2021"
+  ],
+  [
+    "Secondary School",
+    "MPS | Jam-Jodhpur",
+    "2011 - 2018"
+  ]
+],
   "projects": [
     [
       "Hi chat",
