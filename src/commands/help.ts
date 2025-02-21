@@ -5,7 +5,7 @@ const helpObj = {
     "Who made this website?",
     ],
     [
-      "education",
+      "'education'",
       "What did I study?"
     ],
     [
