@@ -61,6 +61,15 @@
       "timeZ",
       "a time zone converter react native project.",
       "https://github.com/soul059/timeZ"
+    ],
+    [
+      "Learning-Notes",
+      "Modern markdown viewer and editor, that has my notes pre-accessed.",
+      "https://learning-notes-ashy.vercel.app"
+    ],
+    [
+      "shell-in-cpp",
+      "a simple shell implemented in C++."
     ]
   ],
   "colors": {

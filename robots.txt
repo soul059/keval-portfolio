@@ -1,0 +1,10 @@
+# robots.txt for Keval's Portfolio
+User-agent: *
+Allow: /
+Crawl-delay: 10
+
+# Block sensitive folders (if any)
+# Disallow: /admin/
+# Disallow: /private/
+
+Sitemap: https://keval.live/sitemap.xml

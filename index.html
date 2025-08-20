@@ -8,12 +8,53 @@
   <link rel="icon" type="image/x-png" href="/res/logo.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0 maximum-scale=1" />
   <script src="https://kit.fontawesome.com/d5effce557.js" crossorigin="anonymous"></script>
-  <title>WebShell</title>
+  <title>WebShell | Keval Chauhan Portfolio</title>
+  <!-- SEO Meta Tags (from config.json) -->
+  <meta name="description" content="Hi stranger. Welcome to keval's portfolio. I'm a web developer who's really passionate about creating awesome digital experiences. I love collaborating with other creative people to bring ideas to life.">
+  <meta name="keywords" content="WebShell, Keval Chauhan, portfolio, web developer, software engineer, projects, education, Hi chat, soulblog, timeZ, Learning-Notes">
+  <meta name="author" content="Keval S. Chauhan">
+  <meta property="og:title" content="WebShell | Keval Chauhan Portfolio">
+  <meta property="og:description" content="Hi stranger. Welcome to keval's portfolio. I'm a web developer who's really passionate about creating awesome digital experiences. I love collaborating with other creative people to bring ideas to life.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="/res/logo.png">
+  <meta property="og:url" content="https://github.com/soul059/keval-portfolio">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="WebShell | Keval Chauhan Portfolio">
+  <meta name="twitter:description" content="Hi stranger. Welcome to keval's portfolio. I'm a web developer who's really passionate about creating awesome digital experiences. I love collaborating with other creative people to bring ideas to life.">
+  <meta name="twitter:image" content="/res/logo.png">
+  <!-- Structured Data: JSON-LD for Portfolio (from config.json) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "name": "Keval S. Chauhan",
+    "url": "https://github.com/soul059/keval-portfolio",
+    "image": "/res/logo.png",
+    "email": "keval.s.chauhan.1@gmail.com",
+    "sameAs": [
+      "https://github.com/soul059",
+      "https://linkedin.com/in/keval-s-chauhan"
+    ],
+    "jobTitle": "Web Developer",
+    "description": "Hi stranger. Welcome to keval's portfolio. I'm a web developer who's really passionate about creating awesome digital experiences. I love collaborating with other creative people to bring ideas to life.",
+    "alumniOf": [
+      {
+        "@type": "CollegeOrUniversity",
+        "name": "Dharmsinh Desai University",
+        "sameAs": "https://www.ddu.ac.in/"
+      }
+    ],
+    "knowsAbout": ["Hi chat", "soulblog", "timeZ", "Learning-Notes"]
+  }
+  </script>
 </head>
 
 <body>
+  <!-- Accessibility: Add skip to main content link -->
+  <a href="#main" class="skip-link" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;">Skip to main content</a>
   <main id="main">
-    <div id="bars">
+    <main id="main" tabindex="-1">
+  <div id="bars" aria-label="Terminal bars" role="presentation">
       <div id="bar-1">WebShell.x64_x86</div>
       <div id="bar-2"></div>
       <div id="bar-3"></div>
@@ -21,14 +62,14 @@
       <div id="bar-5"></div>
     </div>
     <br>
-    <div id="terminal">
+  <div id="terminal" aria-label="Terminal output" role="region">
       <div>
         <span id="prompt"><span id="pre-user"></span>@<span id="pre-host"></span>:$ ~ </span>
       </div>
       <!-- command output will be inserted before #write-lines-->
       <a id="write-lines"></a>
     </div>
-    <div id="input-line">
+  <div id="input-line" aria-label="Terminal input" role="form">
       <div>
         <p id="password-input" style="display: none;">Password: <input id="password-field" autocomplete="off"
             type="password" /></p>
