@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Block build artifacts
+Disallow: /node_modules/
+Disallow: /dist/assets/
+
+Sitemap: https://keval.page/sitemap.xml
