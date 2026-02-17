@@ -5,38 +5,46 @@
   <meta charset="UTF-8" />
   <link rel="stylesheet" href="src/css/css-reset.css">
   <link rel="stylesheet" href="src/css/style.css">
-  <link rel="icon" type="image/x-png" href="/res/logo.png" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0 maximum-scale=1" />
+  <link rel="icon" type="image/png" href="/res/logo.png" />
+  <link rel="apple-touch-icon" href="/res/logo.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5" />
+  <meta name="theme-color" content="#002b36" />
+  <link rel="canonical" href="https://keval.page/" />
   <script src="https://kit.fontawesome.com/d5effce557.js" crossorigin="anonymous"></script>
-  <title>WebShell | Keval Chauhan Portfolio</title>
-  <!-- SEO Meta Tags (from config.json) -->
-  <meta name="description" content="Hi stranger. Welcome to keval's portfolio. I'm a web developer who's really passionate about creating awesome digital experiences. I love collaborating with other creative people to bring ideas to life.">
-  <meta name="keywords" content="WebShell, Keval Chauhan, portfolio, web developer, software engineer, projects, education, Hi chat, soulblog, timeZ, Learning-Notes">
+  <title>Keval Chauhan | Web Developer Portfolio - Interactive Terminal</title>
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="Keval Chauhan — web developer portfolio built as an interactive terminal. Explore projects like Hi Chat, SoulBlog, timeZ & more. B.Tech IT student at DDU, Nadiad.">
+  <meta name="keywords" content="Keval Chauhan, web developer, portfolio, interactive terminal, software engineer, React, Node.js, Hi Chat, SoulBlog, timeZ, DDU Nadiad, frontend developer">
   <meta name="author" content="Keval S. Chauhan">
-  <meta property="og:title" content="WebShell | Keval Chauhan Portfolio">
-  <meta property="og:description" content="Hi stranger. Welcome to keval's portfolio. I'm a web developer who's really passionate about creating awesome digital experiences. I love collaborating with other creative people to bring ideas to life.">
+  <meta name="robots" content="index, follow">
+  <!-- Open Graph -->
+  <meta property="og:title" content="Keval Chauhan | Web Developer Portfolio">
+  <meta property="og:description" content="Interactive terminal-style portfolio showcasing web development projects, skills, and education. Type commands to explore!">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="/res/logo.png">
-  <meta property="og:url" content="https://github.com/soul059/keval-portfolio">
+  <meta property="og:image" content="https://keval.page/res/logo.png">
+  <meta property="og:url" content="https://keval.page/">
+  <meta property="og:site_name" content="Keval Chauhan Portfolio">
+  <meta property="og:locale" content="en_US">
+  <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="WebShell | Keval Chauhan Portfolio">
-  <meta name="twitter:description" content="Hi stranger. Welcome to keval's portfolio. I'm a web developer who's really passionate about creating awesome digital experiences. I love collaborating with other creative people to bring ideas to life.">
-  <meta name="twitter:image" content="/res/logo.png">
-  <!-- Structured Data: JSON-LD for Portfolio (from config.json) -->
+  <meta name="twitter:title" content="Keval Chauhan | Web Developer Portfolio">
+  <meta name="twitter:description" content="Interactive terminal-style portfolio — type commands to explore projects, education & more.">
+  <meta name="twitter:image" content="https://keval.page/res/logo.png">
+  <!-- Structured Data: JSON-LD -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "Person",
     "name": "Keval S. Chauhan",
-    "url": "https://github.com/soul059/keval-portfolio",
-    "image": "/res/logo.png",
+    "url": "https://keval.page/",
+    "image": "https://keval.page/res/logo.png",
     "email": "keval.s.chauhan.1@gmail.com",
     "sameAs": [
       "https://github.com/soul059",
-      "https://linkedin.com/in/keval-s-chauhan"
+      "https://www.linkedin.com/in/keval-s-chauhan"
     ],
     "jobTitle": "Web Developer",
-    "description": "Hi stranger. Welcome to keval's portfolio. I'm a web developer who's really passionate about creating awesome digital experiences. I love collaborating with other creative people to bring ideas to life.",
+    "description": "Web developer passionate about creating awesome digital experiences. B.Tech IT student at Dharmsinh Desai University.",
     "alumniOf": [
       {
         "@type": "CollegeOrUniversity",
@@ -44,17 +52,62 @@
         "sameAs": "https://www.ddu.ac.in/"
       }
     ],
-    "knowsAbout": ["Hi chat", "soulblog", "timeZ", "Learning-Notes"]
+    "knowsAbout": ["Web Development", "React", "Node.js", "TypeScript", "JavaScript"]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Keval Chauhan Portfolio",
+    "url": "https://keval.page/",
+    "description": "Interactive terminal-style portfolio of Keval Chauhan, web developer."
   }
   </script>
 </head>
 
 <body>
-  <!-- Accessibility: Add skip to main content link -->
-  <a href="#main" class="skip-link" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;">Skip to main content</a>
-  <main id="main">
-    <main id="main" tabindex="-1">
-  <div id="bars" aria-label="Terminal bars" role="presentation">
+  <!-- Accessibility: Skip link -->
+  <a href="#user-input" class="skip-link">Skip to terminal input</a>
+
+  <!-- SEO: Hidden content for crawlers (visible in noscript) -->
+  <noscript>
+    <div style="padding:2rem;max-width:700px;margin:auto;font-family:monospace;">
+      <h1>Keval Chauhan — Web Developer Portfolio</h1>
+      <p>Hi! I'm Keval, a web developer passionate about creating awesome digital experiences. I'm a B.Tech IT student at Dharmsinh Desai University, Nadiad.</p>
+      <h2>Projects</h2>
+      <ul>
+        <li><a href="https://github.com/soul059/Hi-Chat-backend">Hi Chat</a> — a web chat application</li>
+        <li><a href="https://github.com/soul059/React-blog-webapp">SoulBlog</a> — blogging website</li>
+        <li><a href="https://github.com/soul059/timeZ">timeZ</a> — a time zone converter (React Native)</li>
+        <li><a href="https://learning-notes-ashy.vercel.app">Learning-Notes</a> — modern markdown viewer &amp; editor</li>
+        <li>shell-in-cpp — a simple shell implemented in C++</li>
+      </ul>
+      <h2>Education</h2>
+      <ul>
+        <li>B.Tech in Information Technology — Dharmsinh Desai University, Nadiad (2023–2027)</li>
+        <li>Higher Secondary — Dream International School, Dhoraji (2021–2023)</li>
+      </ul>
+      <h2>Contact</h2>
+      <ul>
+        <li>Email: <a href="mailto:keval.s.chauhan.1@gmail.com">keval.s.chauhan.1@gmail.com</a></li>
+        <li>GitHub: <a href="https://github.com/soul059">github.com/soul059</a></li>
+        <li>LinkedIn: <a href="https://www.linkedin.com/in/keval-s-chauhan">linkedin.com/in/keval-s-chauhan</a></li>
+      </ul>
+      <p>This site requires JavaScript for the interactive terminal experience.</p>
+    </div>
+  </noscript>
+
+  <!-- Hidden SEO text for crawlers (visible to screen readers too) -->
+  <div aria-hidden="false" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;">
+    <h1>Keval Chauhan — Web Developer Portfolio</h1>
+    <p>Interactive terminal portfolio. Type 'help' to see available commands: about, education, projects, whoami, repo, banner, clear.</p>
+    <p>Projects: Hi Chat (web chat app), SoulBlog (blogging website), timeZ (timezone converter), Learning-Notes (markdown editor), shell-in-cpp.</p>
+    <p>Education: B.Tech IT at Dharmsinh Desai University, Nadiad. Contact: keval.s.chauhan.1@gmail.com</p>
+  </div>
+
+  <main id="main" tabindex="-1">
+    <div id="bars" aria-label="Terminal title bar" role="banner">
       <div id="bar-1">WebShell.x64_x86</div>
       <div id="bar-2"></div>
       <div id="bar-3"></div>
@@ -62,22 +115,22 @@
       <div id="bar-5"></div>
     </div>
     <br>
-  <div id="terminal" aria-label="Terminal output" role="region">
+    <div id="terminal" aria-label="Terminal output" role="log" aria-live="polite">
       <div>
         <span id="prompt"><span id="pre-user"></span>@<span id="pre-host"></span>:$ ~ </span>
       </div>
       <!-- command output will be inserted before #write-lines-->
       <a id="write-lines"></a>
     </div>
-  <div id="input-line" aria-label="Terminal input" role="form">
+    <div id="input-line" aria-label="Terminal input" role="form">
       <div>
         <p id="password-input" style="display: none;">Password: <input id="password-field" autocomplete="off"
-            type="password" /></p>
+            type="password" aria-label="Password input" /></p>
         <p id="input-hidden">
           <span id="prompt"><span id="user"></span>@<span id="host"></span>:$ ~
           </span>
           <input id="user-input" type="text" enterkeyhint="Enter" spellcheck="false" autocapitalize="none"
-            autocomplete="off" />
+            autocomplete="off" aria-label="Terminal command input" placeholder="Type 'help' to get started..." />
         </p>
       </div>
       <br>

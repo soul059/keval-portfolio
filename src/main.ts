@@ -117,12 +117,18 @@ function enterKey() {
 
 function tabKey() {
   let currInput = USERINPUT.value;
+  if (!currInput) return;
 
-  for (const ele of COMMANDS) {
-    if(ele.startsWith(currInput)) {
-      USERINPUT.value = ele;
-      return
-    }
+  const matches = COMMANDS.filter(cmd => cmd.startsWith(currInput));
+  
+  if (matches.length === 1) {
+    USERINPUT.value = matches[0];
+    // Visual flash on auto-complete
+    USERINPUT.classList.add('tab-flash');
+    setTimeout(() => USERINPUT.classList.remove('tab-flash'), 300);
+  } else if (matches.length > 1) {
+    // Show all matching commands
+    writeLines(["<br>", ...matches.map(m => `  <span class='command'>${m}</span>`), "<br>"]);
   }
 }
 
@@ -300,7 +306,7 @@ function commandHandler(input : string) {
         break;
       }
 
-      writeLines(DEFAULT);
+      writeLines(DEFAULT(input));
       break;
   }  
 }
@@ -403,14 +409,29 @@ const initEventListeners = () => {
 
   window.addEventListener('load', () => {
     writeLines(BANNER);
+    // Auto-focus the input on load
+    setTimeout(() => USERINPUT.focus(), 100);
   });
   
-  USERINPUT.addEventListener('keypress', userInputHandler);
+  // Use only keydown to avoid double-firing (keypress + keydown both fire on Enter)
   USERINPUT.addEventListener('keydown', userInputHandler);
-  PASSWORD_INPUT.addEventListener('keypress', userInputHandler);
+  PASSWORD_INPUT.addEventListener('keydown', userInputHandler);
 
-  window.addEventListener('click', () => {
-    USERINPUT.focus();
+  // Focus input on click anywhere, but don't steal focus from links
+  window.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName !== 'A' && target.tagName !== 'INPUT') {
+      USERINPUT.focus();
+    }
+  });
+
+  // Also focus on any keypress when not focused
+  window.addEventListener('keydown', (e) => {
+    if (document.activeElement !== USERINPUT && 
+        document.activeElement !== PASSWORD_INPUT &&
+        !e.ctrlKey && !e.altKey && !e.metaKey) {
+      USERINPUT.focus();
+    }
   });
 
   console.log(`%cPassword: ${command.password}`, "color: red; font-size: 20px;");

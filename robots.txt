@@ -1,10 +1,9 @@
 # robots.txt for Keval's Portfolio
 User-agent: *
 Allow: /
-Crawl-delay: 10
 
-# Block sensitive folders (if any)
-# Disallow: /admin/
-# Disallow: /private/
+# Block build artifacts
+Disallow: /node_modules/
+Disallow: /dist/assets/
 
-Sitemap: https://keval.live/sitemap.xml
+Sitemap: https://keval.page/sitemap.xml

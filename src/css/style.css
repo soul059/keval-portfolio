@@ -11,6 +11,32 @@
   --prompt-2: #70FDFF;
 }
 
+/* Skip link for accessibility */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  z-index: 100;
+  padding: 8px 16px;
+  background: var(--border);
+  color: var(--bg);
+  font-size: 14px;
+  text-decoration: none;
+  border-radius: 0 0 4px 0;
+}
+
+.skip-link:focus {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: auto;
+  height: auto;
+  overflow: visible;
+}
+
 @keyframes typing {
   from {
     width: 0
@@ -19,6 +45,11 @@
   to {
     width: 100%
   }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 html,
@@ -32,6 +63,7 @@ body {
 
 html {
   overflow: auto;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -90,11 +122,23 @@ input {
   font-size: 16px;
   color: #FF7685;
   caret-color: var(--prompt-default);
-  width: 50%;
+  width: 60%;
+}
+
+/* Placeholder styling */
+input::placeholder {
+  color: var(--prompt-default);
+  opacity: 0.4;
+  font-style: italic;
+}
+
+input:focus::placeholder {
+  opacity: 0.2;
 }
 
 a {
   color: #B6AAEE;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 a:hover {
@@ -110,6 +154,7 @@ a:hover {
   width: 100%;
   top: 0;
   background-color: var(--bg);
+  z-index: 10;
 }
 
 #bar-1 {
@@ -147,6 +192,7 @@ a:hover {
 
 #terminal {
   margin-left: 20px;
+  padding-right: 10px;
 }
 
 #input-line {
@@ -171,23 +217,50 @@ a:hover {
   font-weight: 400;
 }
 
+/* Tab-completion highlight flash */
+.tab-flash {
+  animation: tabFlash 0.3s ease;
+}
+
+@keyframes tabFlash {
+  0% { background: rgba(255, 153, 81, 0.3); }
+  100% { background: transparent; }
+}
+
+/* Smooth line appearance */
+#terminal p {
+  animation: typing 0.4s steps(30, end), fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Selection styling */
+::selection {
+  background: var(--border);
+  color: var(--bg);
+}
+
 @media (max-width: 600px) {
   body {
-    font-size: 10px;
-    padding: 2px;
+    font-size: 12px;
+    padding: 4px;
     font-weight: 300;
   }
 
   input {
-    font-size: 10px;
+    font-size: 12px;
+    width: 55%;
   }
 
   p {
-    line-height: 14px;
+    line-height: 16px;
   }
 
   pre {
-    line-height: 12px !important;
+    line-height: 13px !important;
     font-size: 9px;
   }
 
@@ -196,14 +269,37 @@ a:hover {
   }
 
   div {
-    line-height: 14px;
+    line-height: 16px;
   }
 
   #terminal {
     margin-left: 8px;
+    padding-right: 4px;
   }
 
   #input-line {
     margin-left: 8px;
+  }
+
+  #bar-1 {
+    font-size: 16px;
+    height: 28px;
+    line-height: 28px;
+  }
+}
+
+/* Very small screens */
+@media (max-width: 360px) {
+  body {
+    padding: 2px;
+  }
+
+  pre {
+    font-size: 7px;
+    line-height: 10px !important;
+  }
+
+  input {
+    width: 45%;
   }
 }
