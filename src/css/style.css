@@ -104,8 +104,9 @@ p {
   display: block;
   line-height: 22px;
   animation: typing 0.5s steps(30, end);
-  white-space: nowrap;
+  white-space: pre-wrap;
   overflow: hidden;
+  word-break: break-word;
 }
 
 div {
@@ -219,6 +220,23 @@ a:hover {
     0 0 7px #fff,
     0 0 151px var(--border);
   color: #FD9BDB;
+}
+
+.cmd-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  margin-right: 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: #FD9BDB;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.cmd-chip:hover {
+  background-color: var(--border);
+  color: var(--bg);
 }
 
 .output {

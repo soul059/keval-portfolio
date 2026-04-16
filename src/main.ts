@@ -29,7 +29,7 @@ const PRE_USER = document.getElementById("pre-user");
 const HOST = document.getElementById("host");
 const USER = document.getElementById("user");
 const PROMPT = document.getElementById("prompt");
-const COMMANDS = ["help", "about","education","projects", "whoami", "repo", "banner", "clear"];
+const COMMANDS = ["help", "about","education","projects", "whoami", "repo", "github", "linkedin", "banner", "clear"];
 const HISTORY : string[] = [];
 const SUDO_PASSWORD = command.password;
 const REPO_LINK = command.repoLink;
@@ -128,7 +128,11 @@ function tabKey() {
     setTimeout(() => USERINPUT.classList.remove('tab-flash'), 300);
   } else if (matches.length > 1) {
     // Show all matching commands
-    writeLines(["<br>", ...matches.map(m => `  <span class='command'>${m}</span>`), "<br>"]);
+    writeLines([
+      "<br>",
+      `Suggestions: ${matches.map(m => `<span class='cmd-chip' data-command='${m}'>${m}</span>`).join(" ")}`,
+      "<br>"
+    ]);
   }
 }
 
@@ -420,6 +424,13 @@ const initEventListeners = () => {
   // Focus input on click anywhere, but don't steal focus from links
   window.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
+    const chip = target.closest("[data-command]") as HTMLElement | null;
+    if (chip?.dataset.command) {
+      USERINPUT.value = chip.dataset.command;
+      enterKey();
+      return;
+    }
+
     if (target.tagName !== 'A' && target.tagName !== 'INPUT') {
       USERINPUT.focus();
     }
