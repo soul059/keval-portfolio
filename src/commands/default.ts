@@ -1,9 +1,13 @@
+import command from '../../config.json' assert {type: 'json'};
+
 const createDefault = (input?: string) : string[] => {
   const cmd = input ? `'${input}'` : 'that';
+  const prefix = command.messages?.unknownCommandPrefix ?? "Command not found";
+  const hint = command.messages?.unknownCommandHint ?? "Type <span class='command'>'help'</span> to see available commands.";
   const defaultMsgArr = [
     "<br>",
-    `Command not found: <span class='command'>${cmd}</span>`,
-    "Type <span class='command'>'help'</span> to see available commands.",
+    `${prefix}: <span class='command'>${cmd}</span>`,
+    hint,
     "<br>"
   ]  
   

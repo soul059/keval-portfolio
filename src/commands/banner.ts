@@ -20,10 +20,7 @@ const createBanner = () : string[] => {
   banner.push("<br>");
   banner.push("Welcome to WebShell v1.0.0");
   banner.push("Type <span class='command'>'help'</span> for a list of all available commands.");
-  banner.push("Try: <span class='cmd-chip' data-command='start'>start</span> <span class='cmd-chip' data-command='about'>about</span> <span class='cmd-chip' data-command='projects'>projects</span> <span class='cmd-chip' data-command='resume'>resume</span>");
-  banner.push("Terminal OS: <span class='cmd-chip' data-command='ls'>ls</span> <span class='cmd-chip' data-command='cat resume.md'>cat resume.md</span> <span class='cmd-chip' data-command='theme neon'>theme neon</span>");
-  banner.push("Type <span class='command'>'about'</span> to learn more about me.");
-  banner.push(`Type <span class='command'>'repo'</span> to view the GitHub repository or click <a href='${command.repoLink}' target='_blank'>here</a>.`);
+  banner.push("Start with <span class='command'>'help'</span>.");
   banner.push("<br>");
   return banner;
 }

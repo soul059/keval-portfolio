@@ -1,5 +1,5 @@
 import command from '../config.json' assert { type: 'json' };
-import { HELP } from "./commands/help";
+import { HELP, HELP_TYPES, createHelpByType } from "./commands/help";
 import { BANNER } from "./commands/banner";
 import { ABOUT } from "./commands/about";
 import { DEFAULT } from "./commands/default";
@@ -7,7 +7,7 @@ import { PROJECTS } from "./commands/projects";
 import { createWhoami } from "./commands/whoami";
 import { EDUCATION } from './commands/education';
 
-type ThemeName = "retro" | "neon" | "minimal";
+type ThemeName = string;
 
 interface SessionState {
   theme: ThemeName;
@@ -17,6 +17,7 @@ interface SessionState {
   visited: string[];
   guideStep: number;
   history: string[];
+  usage: Record<string, number>;
 }
 
 interface Theme {
@@ -36,61 +37,34 @@ interface Theme {
   inputInvalid: string;
 }
 
-const STORAGE_KEY = "webshell.session.v3";
-const THEMES: Record<ThemeName, Theme> = {
-  retro: {
-    bg: "#002b36",
-    fg: "#F8DDE5",
-    border: "#A3CCBE",
-    banner: "#FF9951",
-    promptDefault: "#268bd2",
-    promptUser: "#FE6BC9",
-    promptHost: "#70FDFF",
-    promptInput: "#98E5A5",
-    linkText: "#B6AAEE",
-    linkHighlight: "#8ae234",
-    linkHighlightText: "#555753",
-    commandText: "#98E5A5",
-    inputValid: "#98E5A5",
-    inputInvalid: "#FF6B81"
-  },
-  neon: {
-    bg: "#0C0623",
-    fg: "#E9EBFF",
-    border: "#FFADE2",
-    banner: "#FF9951",
-    promptDefault: "#A5A7A7",
-    promptUser: "#FE6BC9",
-    promptHost: "#70FDFF",
-    promptInput: "#FF7685",
-    linkText: "#B6AAEE",
-    linkHighlight: "#FFADE2",
-    linkHighlightText: "#0C0623",
-    commandText: "#FD9BDB",
-    inputValid: "#7CFC98",
-    inputInvalid: "#FF6B81"
-  },
-  minimal: {
-    bg: "#0D1117",
-    fg: "#C9D1D9",
-    border: "#30363D",
-    banner: "#58A6FF",
-    promptDefault: "#8B949E",
-    promptUser: "#79C0FF",
-    promptHost: "#A5D6FF",
-    promptInput: "#C9D1D9",
-    linkText: "#58A6FF",
-    linkHighlight: "#1F6FEB",
-    linkHighlightText: "#FFFFFF",
-    commandText: "#7EE787",
-    inputValid: "#7EE787",
-    inputInvalid: "#FF7B72"
-  }
+const STORAGE_KEY = "webshell.session.v4";
+const fallbackTheme: Theme = {
+  bg: command.colors.background,
+  fg: command.colors.foreground,
+  border: command.colors.border.color,
+  banner: command.colors.banner,
+  promptDefault: command.colors.prompt.default,
+  promptUser: command.colors.prompt.user,
+  promptHost: command.colors.prompt.host,
+  promptInput: command.colors.prompt.input,
+  linkText: command.colors.link.text,
+  linkHighlight: command.colors.link.highlightColor,
+  linkHighlightText: command.colors.link.highlightText,
+  commandText: command.colors.commands.textColor,
+  inputValid: command.colors.commands.textColor,
+  inputInvalid: "#ff6b81"
 };
+const configThemes = command.themes as Record<string, Theme> | undefined;
+const THEMES: Record<ThemeName, Theme> = configThemes && Object.keys(configThemes).length > 0
+  ? configThemes
+  : { default: fallbackTheme };
+const DEFAULT_THEME: ThemeName = (command.defaultTheme && THEMES[command.defaultTheme])
+  ? command.defaultTheme
+  : (Object.keys(THEMES)[0] ?? "default");
 
 const COMMANDS = [
   "help", "start", "about", "education", "projects", "project", "whoami", "repo", "github", "linkedin",
-  "email", "resume", "hire", "book", "banner", "clear", "theme", "motion", "sound", "prefs", "ls", "cat", "open", "quest", "secret", "sudo", "rm"
+  "email", "resume", "history", "man", "keys", "demo", "stats", "version", "status", "hire", "book", "banner", "clear", "theme", "motion", "sound", "prefs", "ls", "cat", "open", "quest", "secret", "sudo", "rm"
 ];
 const ALIASES: Record<string, string> = {
   gh: "github",
@@ -139,18 +113,10 @@ const SOCIAL = command.social;
 const BOOKING_LINK = `https://www.linkedin.com/in/${SOCIAL.linkedin}`;
 
 const VIRTUAL_FILES: Record<string, string> = {
-  "resume.md": [
-    "# Keval S. Chauhan",
-    "",
-    "Web developer focused on React, TypeScript, Node.js, and product-minded UX.",
-    "",
-    "## Highlights",
-    "- B.Tech IT @ DDU Nadiad (2023-2027)",
-    "- Built projects in WebRTC, chat systems, and content platforms",
-    "- Passionate about high-performance, polished interfaces",
-    "",
-    "Use `hire` or `email` to contact me quickly."
-  ].join("\n"),
+  "resume.md": (command.resume?.fallback ?? [
+    "# Resume",
+    "Add your fallback resume in config.json -> resume.fallback"
+  ]).join("\n"),
   "skills.md": [
     "# Skill Stack",
     "- Frontend: React, TypeScript, JavaScript, CSS",
@@ -175,13 +141,14 @@ const GUIDE_STEPS = [
 ];
 
 const DEFAULT_SESSION: SessionState = {
-  theme: "neon",
+  theme: DEFAULT_THEME,
   reducedMotion: false,
   sound: true,
   unlockedSecret: false,
   visited: [],
   guideStep: -1,
-  history: []
+  history: [],
+  usage: {}
 };
 
 const SESSION = loadSession();
@@ -205,7 +172,8 @@ function loadSession(): SessionState {
       unlockedSecret: Boolean(parsed.unlockedSecret),
       visited: Array.isArray(parsed.visited) ? parsed.visited.filter(Boolean) : [],
       guideStep: typeof parsed.guideStep === "number" ? parsed.guideStep : -1,
-      history: Array.isArray(parsed.history) ? parsed.history.filter(Boolean).slice(-80) : []
+      history: Array.isArray(parsed.history) ? parsed.history.filter(Boolean).slice(-80) : [],
+      usage: parsed.usage && typeof parsed.usage === "object" ? parsed.usage : {}
     };
   } catch {
     console.warn("Failed to parse session state. Resetting local session.");
@@ -235,6 +203,7 @@ function resetPreferences() {
   SESSION.visited = [];
   SESSION.guideStep = -1;
   SESSION.history = [];
+  SESSION.usage = {};
   HISTORY.length = 0;
   historyIdx = 0;
   tempInput = "";
@@ -243,6 +212,12 @@ function resetPreferences() {
   applyTheme(SESSION.theme);
   applyMotionPreference();
   updateInputState();
+  persistSession();
+}
+
+function trackCommandUse(commandName: string) {
+  if (!command.telemetry?.enabled) return;
+  SESSION.usage[commandName] = (SESSION.usage[commandName] ?? 0) + 1;
   persistSession();
 }
 
@@ -382,6 +357,16 @@ function getProjectSuggestions(prefix: string): string[] {
   return [...indexed, ...named];
 }
 
+function getManTopics(): string[] {
+  const manPages = command.manPages as Record<string, string[]> | undefined;
+  return Object.keys(manPages ?? {});
+}
+
+function getScenarioNames(): string[] {
+  const scenarios = command.scenarios as Record<string, string[]> | undefined;
+  return Object.keys(scenarios ?? {});
+}
+
 function getTabCompletions(inputRaw: string): string[] {
   const value = inputRaw.toLowerCase();
   const trimmed = value.trim();
@@ -417,6 +402,18 @@ function getTabCompletions(inputRaw: string): string[] {
   }
   if (aliasOrCmd === "motion" || aliasOrCmd === "sound") {
     return ["on", "off"].filter((item) => item.startsWith(argPrefix)).map(complete);
+  }
+  if (aliasOrCmd === "prefs") {
+    return ["export", "reset"].filter((item) => item.startsWith(argPrefix)).map(complete);
+  }
+  if (aliasOrCmd === "help") {
+    return HELP_TYPES.filter((item) => item.startsWith(argPrefix)).map(complete);
+  }
+  if (aliasOrCmd === "man") {
+    return getManTopics().filter((item) => item.startsWith(argPrefix)).map(complete);
+  }
+  if (aliasOrCmd === "demo") {
+    return getScenarioNames().filter((item) => item.startsWith(argPrefix)).map(complete);
   }
   if (aliasOrCmd === "project") {
     return getProjectSuggestions(argPrefix).map(complete);
@@ -462,6 +459,20 @@ function isCommandInputValid(inputRaw: string): boolean | null {
       return getProjectSuggestions(argStr).some((p) => p === argStr);
     case "prefs":
       return ["", "export", "reset"].includes(argStr);
+    case "help":
+      return argStr === "" || HELP_TYPES.includes(argStr as typeof HELP_TYPES[number]);
+    case "history":
+    case "keys":
+    case "stats":
+    case "version":
+    case "status":
+      return argStr === "";
+    case "man":
+      if (argStr === "") return false;
+      return getManTopics().includes(argStr);
+    case "demo":
+      if (argStr === "") return false;
+      return getScenarioNames().includes(argStr);
     case "rm":
       if (argStr === "-rf") return true;
       if (argStr.startsWith("-rf ")) return true;
@@ -516,14 +527,128 @@ function updateQuestProgress() {
   }
 }
 
-function downloadResume() {
-  const link = document.createElement("a");
-  link.href = "/res/resume.pdf";
-  link.download = "Keval-Chauhan-Resume.pdf";
-  link.target = "_blank";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+async function downloadResume() {
+  const pdfPath = command.resume?.pdfPath ?? "/res/resume.pdf";
+  try {
+    const response = await fetch(pdfPath, { method: "GET", cache: "no-store" });
+    if (!response.ok) {
+      writeLines(["PDF not found. Showing fallback resume.", "<br>", ...(command.resume?.fallback ?? VIRTUAL_FILES["resume.md"].split("\n")), "<br>"]);
+      return;
+    }
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = command.resume?.filename ?? "Resume.pdf";
+    link.target = "_blank";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch {
+    writeLines(["Failed to fetch resume PDF. Showing fallback resume.", "<br>", ...(command.resume?.fallback ?? VIRTUAL_FILES["resume.md"].split("\n")), "<br>"]);
+  }
+}
+
+function runScenario(name: string) {
+  const key = name.toLowerCase();
+  const scenarios = command.scenarios as Record<string, string[]> | undefined;
+  const scenario = scenarios?.[key];
+  if (!scenario || !Array.isArray(scenario)) {
+    writeLines([`Scenario not found. Available: ${getScenarioNames().join(", ") || "none"}`, "<br>"]);
+    return;
+  }
+  writeLines([`Running demo scenario: <span class='command'>${key}</span>`, "<br>"]);
+  scenario.forEach((cmd, idx) => {
+    setTimeout(() => commandHandler(String(cmd).toLowerCase()), 350 * (idx + 1));
+  });
+}
+
+function showMan(topic?: string) {
+  if (!topic) {
+    writeLines([
+      "<br>",
+      "Usage: man <topic>",
+      `Available: ${Object.keys(command.manPages ?? {}).join(", ") || "none"}`,
+      "<br>"
+    ]);
+    return;
+  }
+  const manPages = command.manPages as Record<string, string[]> | undefined;
+  const page = manPages?.[topic];
+  if (!page) {
+    writeLines(["No manual entry for that topic.", "<br>"]);
+    return;
+  }
+  const lines = Array.isArray(page) ? page : [String(page)];
+  writeLines(["<br>", ...lines, "<br>"]);
+}
+
+function showKeys() {
+  const shortcuts = command.shortcuts ?? [];
+  if (!Array.isArray(shortcuts) || shortcuts.length === 0) {
+    writeLines(["No shortcuts configured in config.json.", "<br>"]);
+    return;
+  }
+  writeLines([
+    "<br>",
+    ...shortcuts.map((entry) => `${entry[0]}: ${entry[1]}`),
+    "<br>"
+  ]);
+}
+
+function showHistory() {
+  if (HISTORY.length === 0) {
+    writeLines(["No history yet.", "<br>"]);
+    return;
+  }
+  writeLines([
+    "<br>",
+    ...HISTORY.slice(-30).map((cmd, idx) => `${HISTORY.length - Math.min(30, HISTORY.length) + idx + 1}. ${cmd}`),
+    "<br>"
+  ]);
+}
+
+function showStats() {
+  const entries = Object.entries(SESSION.usage).sort((a, b) => b[1] - a[1]);
+  if (entries.length === 0) {
+    writeLines(["No usage data yet.", "<br>"]);
+    return;
+  }
+  writeLines([
+    "<br>",
+    "Local command usage:",
+    ...entries.map(([key, count]) => `${key}: ${count}`),
+    "<br>"
+  ]);
+}
+
+function showVersion() {
+  const version = command.version;
+  if (!version) {
+    writeLines(["Version info not configured.", "<br>"]);
+    return;
+  }
+  writeLines([
+    "<br>",
+    `${version.name ?? "WebShell"} ${version.number ?? ""}`.trim(),
+    version.channel ? `Channel: ${version.channel}` : "",
+    "<br>"
+  ].filter(Boolean));
+}
+
+function showStatus() {
+  const status = command.status;
+  if (!status) {
+    writeLines(["Status not configured.", "<br>"]);
+    return;
+  }
+  writeLines([
+    "<br>",
+    status.headline ?? "No status headline configured.",
+    ...(Array.isArray(status.details) ? status.details : []),
+    "<br>"
+  ]);
 }
 
 function getCommandSuggestions(input: string): string[] {
@@ -699,6 +824,7 @@ function commandHandler(input: string) {
   const aliasOrCmd = ALIASES[parts[0]] ?? parts[0];
   const args = parts.slice(1);
   const normalizedInput = [aliasOrCmd, ...args].join(" ");
+  trackCommandUse(aliasOrCmd);
   checkGuideProgress(normalizedInput);
 
   switch (aliasOrCmd) {
@@ -719,7 +845,11 @@ function commandHandler(input: string) {
       registerVisit("start");
       break;
     case "help":
-      writeLines(HELP);
+      if (args[0]) {
+        writeLines(createHelpByType(args[0]));
+      } else {
+        writeLines(HELP);
+      }
       registerVisit("help");
       break;
     case "whoami":
@@ -760,8 +890,33 @@ function commandHandler(input: string) {
       break;
     case "resume":
       writeLines(["Downloading resume PDF...", "If it does not download, add your file at <span class='command'>public/resume.pdf</span> or <span class='command'>res/resume.pdf</span>.", "<br>"]);
-      setTimeout(() => downloadResume(), 200);
+      setTimeout(() => { void downloadResume(); }, 200);
       registerVisit("resume");
+      break;
+    case "history":
+      showHistory();
+      break;
+    case "man":
+      showMan(args[0]);
+      break;
+    case "keys":
+      showKeys();
+      break;
+    case "demo":
+      if (!args[0]) {
+        writeLines([`Usage: <span class='command'>demo &lt;${getScenarioNames().join("|") || "scenario"}&gt;</span>`, "<br>"]);
+        break;
+      }
+      runScenario(args[0]);
+      break;
+    case "stats":
+      showStats();
+      break;
+    case "version":
+      showVersion();
+      break;
+    case "status":
+      showStatus();
       break;
     case "hire":
       writeLines([
@@ -1005,9 +1160,14 @@ function easterEggStyles() {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      console.warn("Service worker registration failed.");
-    });
+    navigator.serviceWorker.getRegistrations()
+      .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+      .then(() => caches.keys())
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith("webshell-cache-")).map((key) => caches.delete(key))))
+      .then(() => navigator.serviceWorker.register("/sw-v3.js"))
+      .catch(() => {
+        console.warn("Service worker recovery failed.");
+      });
   });
 }
 
@@ -1020,11 +1180,33 @@ function initEventListeners() {
   window.addEventListener("load", () => {
     applyTheme(SESSION.theme);
     applyMotionPreference();
-    writeLines(BANNER);
-    writeLines([
-      "Type <span class='cmd-chip' data-command='start'>start</span> for guided mode or <span class='cmd-chip' data-command='help'>help</span> to explore.",
-      "<br>"
-    ]);
+    const startup = command.startup;
+    const shouldShowBanner = startup?.showBanner ?? true;
+    const startupDelay = shouldShowBanner ? Math.max(200, BANNER.length * 40) : 0;
+    if (shouldShowBanner) {
+      writeLines(BANNER);
+    } else {
+      writeLines(["<br>"]);
+    }
+
+    if (startup?.compact) {
+      const lines = Array.isArray(startup.hintLines) ? startup.hintLines.filter(Boolean) : [];
+      if (lines.length > 0) {
+        setTimeout(() => {
+          writeLines([
+            ...lines,
+            "<br>"
+          ]);
+        }, startupDelay);
+      }
+    } else {
+      setTimeout(() => {
+        writeLines([
+          "Type <span class='cmd-chip' data-command='start'>start</span> for guided mode or <span class='cmd-chip' data-command='help'>help</span> to explore.",
+          "<br>"
+        ]);
+      }, startupDelay);
+    }
     setTimeout(() => USERINPUT.focus(), 80);
     setTimeout(() => updateInputState(), 120);
   });
@@ -1048,6 +1230,16 @@ function initEventListeners() {
   });
 
   window.addEventListener("keydown", (e) => {
+    if (e.ctrlKey && (e.key === "r" || e.key === "R")) {
+      e.preventDefault();
+      const needle = USERINPUT.value.trim().toLowerCase();
+      const matched = [...HISTORY].reverse().find((cmd) => cmd.toLowerCase().includes(needle));
+      if (matched) {
+        USERINPUT.value = matched;
+        updateInputState();
+      }
+      return;
+    }
     if (
       document.activeElement !== USERINPUT &&
       document.activeElement !== PASSWORD_INPUT &&
@@ -1060,6 +1252,7 @@ function initEventListeners() {
   USERINPUT.setAttribute("autocomplete", "new-password");
   USERINPUT.setAttribute("autocorrect", "off");
   USERINPUT.setAttribute("aria-autocomplete", "none");
+  USERINPUT.setAttribute("inputmode", "text");
   USERINPUT.setAttribute("name", "terminal-input");
   updateInputState();
 }

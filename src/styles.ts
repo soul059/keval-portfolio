@@ -3,21 +3,40 @@ import command from '../config.json' assert {type: 'json'};
 (() => {
   const style = document.createElement('style');
   const head = document.head;
+  const themes = command.themes as Record<string, {
+    bg: string;
+    fg: string;
+    border: string;
+    banner: string;
+    promptDefault: string;
+    promptUser: string;
+    promptHost: string;
+    promptInput: string;
+    linkText: string;
+    linkHighlight: string;
+    linkHighlightText: string;
+    commandText: string;
+    inputValid: string;
+    inputInvalid: string;
+  }> | undefined;
+  const selected = (command.defaultTheme && themes?.[command.defaultTheme])
+    ? themes[command.defaultTheme]
+    : undefined;
   const rootVars = `
-    --bg: ${command.colors.background};
-    --text: ${command.colors.foreground};
-    --border: ${command.colors.border.color};
-    --banner-color: ${command.colors.banner};
-    --prompt-default: ${command.colors.prompt.default};
-    --prompt-user: ${command.colors.prompt.user};
-    --prompt-host: ${command.colors.prompt.host};
-    --prompt-input: ${command.colors.prompt.input};
-    --link-text: ${command.colors.link.text};
-    --link-highlight-bg: ${command.colors.link.highlightColor};
-    --link-highlight-text: ${command.colors.link.highlightText};
-    --command-text: ${command.colors.commands.textColor};
-    --input-valid: ${command.colors.commands.textColor};
-    --input-invalid: #ff6b81;
+    --bg: ${selected?.bg ?? command.colors.background};
+    --text: ${selected?.fg ?? command.colors.foreground};
+    --border: ${selected?.border ?? command.colors.border.color};
+    --banner-color: ${selected?.banner ?? command.colors.banner};
+    --prompt-default: ${selected?.promptDefault ?? command.colors.prompt.default};
+    --prompt-user: ${selected?.promptUser ?? command.colors.prompt.user};
+    --prompt-host: ${selected?.promptHost ?? command.colors.prompt.host};
+    --prompt-input: ${selected?.promptInput ?? command.colors.prompt.input};
+    --link-text: ${selected?.linkText ?? command.colors.link.text};
+    --link-highlight-bg: ${selected?.linkHighlight ?? command.colors.link.highlightColor};
+    --link-highlight-text: ${selected?.linkHighlightText ?? command.colors.link.highlightText};
+    --command-text: ${selected?.commandText ?? command.colors.commands.textColor};
+    --input-valid: ${selected?.inputValid ?? command.colors.commands.textColor};
+    --input-invalid: ${selected?.inputInvalid ?? "#ff6b81"};
   `;
 
   head.appendChild(style);

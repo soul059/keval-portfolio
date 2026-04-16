@@ -3,11 +3,11 @@
 "    ▄▄",
 "    ▀███                                  ▀███",
 "      ██                                    ██",
-"      ██  ▄██▀  ▄▄█▀██▀██▀   ▀██▀ ▄█▀██▄    ██",
-"      ██ ▄█    ▄█▀   ██ ██   ▄█  ██   ██    ██",
-"      ██▄██    ██▀▀▀▀▀▀  ██ ▄█    ▄█████    ██",
-"      ██ ▀██▄  ██▄    ▄   ███    ██   ██    ██",
-"    ▄████▄ ██▄▄ ▀█████▀    █     ▀████▀██▄▄████▄"
+"      ██  ▄██▀  ▄▄█▀██ ▀██▀   ▀██▀ ▄█▀██▄    ██",
+"      ██ ▄█    ▄█▀   ██  ██   ▄█  ██   ██    ██",
+"      ██▄██    ██▀▀▀▀▀▀   ██ ▄█    ▄█████    ██",
+"      ██ ▀██▄  ██▄    ▄    ███    ██   ██    ██",
+"    ▄████▄ ██▄▄ ▀█████▀     █     ▀████▀██▄▄████▄"
   ],
   "title": "WebShell",
   "username": "visitor",
@@ -18,6 +18,23 @@
     "email": "keval.s.chauhan.1@gmail.com",
     "github": "soul059",
     "linkedin": "keval-s-chauhan"
+  },
+  "version": {
+    "name": "WebShell",
+    "number": "1.0.0",
+    "channel": "stable"
+  },
+  "status": {
+    "headline": "Available for internships and freelance projects.",
+    "details": [
+      "Focus: React, TypeScript, Node.js",
+      "Response time: usually within 24 hours",
+      "Best contact: email or LinkedIn"
+    ]
+  },
+  "messages": {
+    "unknownCommandPrefix": "Unknown command",
+    "unknownCommandHint": "Type 'help' to see available commands."
   },
   "aboutGreeting": [
   "Hi stranger. Welcome to keval's portfolio.",
@@ -77,6 +94,242 @@
       "a simple shell implemented in C++."
     ]
   ],
+  "resume": {
+    "pdfPath": "/res/resume.pdf",
+    "filename": "Keval-Chauhan-Resume.pdf",
+    "fallback": [
+      "# Keval S. Chauhan",
+      "",
+      "Web developer focused on React, TypeScript, Node.js, and product-minded UX.",
+      "",
+      "## Highlights",
+      "- B.Tech IT @ DDU Nadiad (2023-2027)",
+      "- Built projects in WebRTC, chat systems, and content platforms",
+      "- Passionate about high-performance, polished interfaces"
+    ]
+  },
+  "telemetry": {
+    "enabled": true
+  },
+  "shortcuts": [
+    [
+      "Tab",
+      "Autocomplete commands and supported args"
+    ],
+    [
+      "Esc",
+      "Clear input line"
+    ],
+    [
+      "Arrow Up/Down",
+      "Browse command history"
+    ],
+    [
+      "Ctrl+R",
+      "Reverse search history by current input"
+    ]
+  ],
+  "manPages": {
+    "help": [
+      "help",
+      "Show all available commands grouped by category."
+    ],
+    "about": [
+      "about",
+      "Show intro and social links."
+    ],
+    "education": [
+      "education",
+      "Show education timeline."
+    ],
+    "projects": [
+      "projects",
+      "List all featured projects."
+    ],
+    "start": [
+      "start",
+      "Run guided flow through portfolio highlights."
+    ],
+    "whoami": [
+      "whoami",
+      "Print a random identity message."
+    ],
+    "banner": [
+      "banner",
+      "Render startup banner again."
+    ],
+    "repo": [
+      "repo",
+      "Open repository in a new tab."
+    ],
+    "github": [
+      "github",
+      "Open GitHub profile."
+    ],
+    "linkedin": [
+      "linkedin",
+      "Open LinkedIn profile."
+    ],
+    "email": [
+      "email",
+      "Open default email composer."
+    ],
+    "resume": [
+      "resume",
+      "Download resume PDF or show configured fallback."
+    ],
+    "history": [
+      "history",
+      "Show recent persisted command history."
+    ],
+    "keys": [
+      "keys",
+      "Show configured keyboard shortcuts."
+    ],
+    "project": [
+      "project <name|index>",
+      "Show deep-dive view for a specific project."
+    ],
+    "open": [
+      "open <repo|github|linkedin|email|resume|project ...>",
+      "Open supported targets directly."
+    ],
+    "ls": [
+      "ls [path]",
+      "List virtual files/folders from the shell view."
+    ],
+    "cat": [
+      "cat <file>",
+      "Read virtual text files like resume.md and skills.md."
+    ],
+    "theme": [
+      "theme [retro|neon|minimal]",
+      "Switch terminal theme."
+    ],
+    "motion": [
+      "motion [on|off]",
+      "Toggle reduced motion preference."
+    ],
+    "sound": [
+      "sound [on|off]",
+      "Toggle typing sound preference."
+    ],
+    "demo": [
+      "demo <recruiter|client>",
+      "Run a scripted command sequence for specific audiences."
+    ],
+    "prefs": [
+      "prefs [export|reset]",
+      "View or reset stored local preferences."
+    ],
+    "stats": [
+      "stats",
+      "Show local command usage analytics."
+    ],
+    "version": [
+      "version",
+      "Show current site/version metadata."
+    ],
+    "status": [
+      "status",
+      "Show current availability and contact preference."
+    ],
+    "quest": [
+      "quest",
+      "Show easter-quest progress with pending steps."
+    ],
+    "secret": [
+      "secret",
+      "Show hidden content after quest completion."
+    ],
+    "sudo": [
+      "sudo",
+      "Request elevated mode for easter commands."
+    ],
+    "rm": [
+      "rm -rf <dir>",
+      "Easter command requiring sudo mode."
+    ],
+    "clear": [
+      "clear",
+      "Clear terminal output."
+    ]
+  },
+  "scenarios": {
+    "recruiter": [
+      "about",
+      "projects",
+      "project 1",
+      "education",
+      "resume",
+      "hire"
+    ],
+    "client": [
+      "about",
+      "projects",
+      "project swoosh",
+      "project learning-notes",
+      "email"
+    ]
+  },
+  "startup": {
+    "compact": true,
+    "showBanner": true,
+    "hintLines": [
+      
+    ]
+  },
+  "defaultTheme": "neon",
+  "themes": {
+    "retro": {
+      "bg": "#002b36",
+      "fg": "#F8DDE5",
+      "border": "#A3CCBE",
+      "banner": "#FF9951",
+      "promptDefault": "#268bd2",
+      "promptUser": "#FE6BC9",
+      "promptHost": "#70FDFF",
+      "promptInput": "#98E5A5",
+      "linkText": "#B6AAEE",
+      "linkHighlight": "#8ae234",
+      "linkHighlightText": "#555753",
+      "commandText": "#98E5A5",
+      "inputValid": "#98E5A5",
+      "inputInvalid": "#FF6B81"
+    },
+    "neon": {
+      "bg": "#0C0623",
+      "fg": "#E9EBFF",
+      "border": "#FFADE2",
+      "banner": "#FF9951",
+      "promptDefault": "#A5A7A7",
+      "promptUser": "#FE6BC9",
+      "promptHost": "#70FDFF",
+      "promptInput": "#FF7685",
+      "linkText": "#B6AAEE",
+      "linkHighlight": "#FFADE2",
+      "linkHighlightText": "#0C0623",
+      "commandText": "#FD9BDB",
+      "inputValid": "#7CFC98",
+      "inputInvalid": "#FF6B81"
+    },
+    "minimal": {
+      "bg": "#0D1117",
+      "fg": "#C9D1D9",
+      "border": "#30363D",
+      "banner": "#58A6FF",
+      "promptDefault": "#8B949E",
+      "promptUser": "#79C0FF",
+      "promptHost": "#A5D6FF",
+      "promptInput": "#C9D1D9",
+      "linkText": "#58A6FF",
+      "linkHighlight": "#1F6FEB",
+      "linkHighlightText": "#FFFFFF",
+      "commandText": "#7EE787",
+      "inputValid": "#7EE787",
+      "inputInvalid": "#FF7B72"
+    }
+  },
   "colors": {
     "background": "#002b36",
     "foreground": "#F8DDE5",
