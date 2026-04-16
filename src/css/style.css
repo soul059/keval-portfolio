@@ -6,9 +6,17 @@
   --bg: #0C0623;
   --border: #FFADE2;
   --text: #F8DDE5;
+  --banner-color: #FF9951;
   --prompt-default: #A5A7A7;
-  --prompt-1: #FE6BC9;
-  --prompt-2: #70FDFF;
+  --prompt-user: #FE6BC9;
+  --prompt-host: #70FDFF;
+  --prompt-input: #FF7685;
+  --link-text: #B6AAEE;
+  --link-highlight-bg: #FFADE2;
+  --link-highlight-text: #0C0623;
+  --command-text: #FD9BDB;
+  --input-valid: #7CFC98;
+  --input-invalid: #FF6B81;
 }
 
 /* Skip link for accessibility */
@@ -103,9 +111,9 @@ main::-webkit-scrollbar {
 p {
   display: block;
   line-height: 22px;
-  animation: typing 0.5s steps(30, end);
+  animation: fadeIn 0.3s ease;
   white-space: pre-wrap;
-  overflow: hidden;
+  overflow: visible;
   word-break: break-word;
 }
 
@@ -122,21 +130,47 @@ pre {
   margin: 0;
   padding: 0;
   line-height: 20px !important;
-  color: #FF9951;
+  color: var(--banner-color);
   font-family: "ascii", monospace;
 }
 
 input {
   font-family: 'IBM Plex Mono', monospace;
+  background: transparent !important;
   padding: 0px;
   margin: 0px;
   border: none;
+  box-shadow: none;
+  -webkit-appearance: none;
+  appearance: none;
   resize: none;
   outline: none;
   font-size: 16px;
-  color: #FF7685;
+  color: var(--prompt-input);
   caret-color: var(--prompt-default);
   width: 60%;
+}
+
+input.command-valid {
+  color: var(--input-valid);
+}
+
+input.command-invalid {
+  color: var(--input-invalid);
+}
+
+#pre-host,
+#host {
+  color: var(--prompt-host);
+}
+
+#pre-user,
+#user {
+  color: var(--prompt-user);
+}
+
+#prompt {
+  color: var(--prompt-default);
 }
 
 /* Placeholder styling */
@@ -151,13 +185,13 @@ input:focus::placeholder {
 }
 
 a {
-  color: #B6AAEE;
+  color: var(--link-text);
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 a:hover {
-  background-color: var(--border);
-  color: var(--bg);
+  background-color: var(--link-highlight-bg);
+  color: var(--link-highlight-text);
 }
 
 #bars {
@@ -219,7 +253,7 @@ a:hover {
   text-shadow:
     0 0 7px #fff,
     0 0 151px var(--border);
-  color: #FD9BDB;
+  color: var(--command-text);
 }
 
 .cmd-chip {
@@ -228,7 +262,7 @@ a:hover {
   margin-right: 6px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  color: #FD9BDB;
+  color: var(--command-text);
   text-decoration: none;
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease;
@@ -244,8 +278,16 @@ a:hover {
 }
 
 .keys {
-  color: #FF9951;
+  color: var(--banner-color);
   font-weight: 400;
+}
+
+body.reduced-motion *,
+body.reduced-motion *::before,
+body.reduced-motion *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
 }
 
 /* Tab-completion highlight flash */
@@ -260,7 +302,7 @@ a:hover {
 
 /* Smooth line appearance */
 #terminal p {
-  animation: typing 0.4s steps(30, end), fadeIn 0.3s ease;
+  animation: fadeIn 0.3s ease;
 }
 
 @keyframes fadeIn {

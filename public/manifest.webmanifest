@@ -1,0 +1,16 @@
+{
+  "name": "Keval WebShell Portfolio",
+  "short_name": "KevalTerm",
+  "description": "Interactive terminal-style portfolio of Keval Chauhan",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#002b36",
+  "theme_color": "#002b36",
+  "icons": [
+    {
+      "src": "/res/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
