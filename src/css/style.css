@@ -282,6 +282,43 @@ a:hover {
   font-weight: 400;
 }
 
+.help-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 12px;
+  margin: 4px 0 8px;
+}
+
+.help-layout-single {
+  grid-column: 1 / -1;
+}
+
+.help-card {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.help-title {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: minmax(170px, 220px) 1fr;
+  gap: 4px 12px;
+}
+
+.help-cmd {
+  white-space: nowrap;
+}
+
+.help-desc {
+  display: block;
+}
+
 body.reduced-motion *,
 body.reduced-motion *::before,
 body.reduced-motion *::after {
@@ -303,6 +340,10 @@ body.reduced-motion *::after {
 /* Smooth line appearance */
 #terminal p {
   animation: fadeIn 0.3s ease;
+}
+
+#terminal p.no-line-anim {
+  animation: none;
 }
 
 @keyframes fadeIn {
@@ -358,6 +399,19 @@ body.reduced-motion *::after {
     font-size: 16px;
     height: 28px;
     line-height: 28px;
+  }
+
+  .help-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .help-grid {
+    grid-template-columns: 1fr;
+    gap: 2px 0;
+  }
+
+  .help-cmd {
+    white-space: normal;
   }
 }
 

@@ -36,6 +36,8 @@ const helpObj = {
     ["'motion [on|off]'", "Toggle reduced motion."],
     ["'sound [on|off]'", "Toggle typing sound."],
     ["'prefs [export|reset]'", "Manage local storage preferences."],
+    ["'su <admin-username>'", "Authenticate as seeded admin."],
+    ["'admin [whoami|logout|blogs|config|analytics]'", "Run admin-only commands."],
     ["'clear'", "Clear the terminal."],
     ["'sudo'", "Unlock hidden commands."],
     ["'ls'", "List directory contents."]
@@ -53,20 +55,11 @@ const sectionTitles: Record<HelpSection, string> = {
 };
 export const HELP_TYPES = ["discover", "navigate", "terminalos", "system"] as const;
 
-const pushCommandSection = (help: string[], title: string, commands: string[][]) => {
-  const SPACE = "&nbsp;";
-  help.push(`<span class='keys'>${title}</span>`);
-  commands.forEach((ele) => {
-    let string = "";
-    string += SPACE.repeat(2);
-    string += "<span class='command'>";
-    string += ele[0];
-    string += "</span>";
-    string += SPACE.repeat(Math.max(2, 17 - ele[0].length));
-    string += ele[1];
-    help.push(string);
-  });
-  help.push("<br>");
+const createCommandSection = (title: string, commands: string[][]): string => {
+  const rows = commands
+    .map(([cmd, desc]) => `<span class='command help-cmd'>${cmd}</span><span class='help-desc'>${desc}</span>`)
+    .join("");
+  return `<span class='help-card'><span class='keys help-title'>${title}</span><span class='help-grid'>${rows}</span></span>`;
 }
 
 const createHelpAll = () : string[] => {
@@ -74,9 +67,7 @@ const createHelpAll = () : string[] => {
   help.push("<br>")
   help.push("Quick start: <span class='cmd-chip' data-command='start'>start</span> <span class='cmd-chip' data-command='about'>about</span> <span class='cmd-chip' data-command='projects'>projects</span> <span class='cmd-chip' data-command='hire'>hire</span>");
   help.push("<br>");
-  sectionOrder.forEach((section) => {
-    pushCommandSection(help, sectionTitles[section], helpObj[section]);
-  });
+  help.push(`<span class='help-layout'>${sectionOrder.map((section) => createCommandSection(sectionTitles[section], helpObj[section])).join("")}</span>`);
 
   help.push("<br>");
   help.push("Help usage:");
@@ -113,7 +104,7 @@ export const createHelpByType = (type: string): string[] => {
 
   const help: string[] = [];
   help.push("<br>");
-  pushCommandSection(help, sectionTitles[section], helpObj[section]);
+  help.push(`<span class='help-layout'><span class='help-layout-single'>${createCommandSection(sectionTitles[section], helpObj[section])}</span></span>`);
   help.push("<br>");
   return help;
 }

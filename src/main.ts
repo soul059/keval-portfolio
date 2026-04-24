@@ -1,11 +1,7 @@
 import command from '../config.json' assert { type: 'json' };
-import { HELP, HELP_TYPES, createHelpByType } from "./commands/help";
+import { HELP_TYPES } from "./commands/help";
 import { BANNER } from "./commands/banner";
-import { ABOUT } from "./commands/about";
-import { DEFAULT } from "./commands/default";
-import { PROJECTS } from "./commands/projects";
-import { createWhoami } from "./commands/whoami";
-import { EDUCATION } from './commands/education';
+import { executeCommand } from "./commands/execute";
 
 type ThemeName = string;
 
@@ -18,6 +14,19 @@ interface SessionState {
   guideStep: number;
   history: string[];
   usage: Record<string, number>;
+}
+
+interface AdminUser {
+  id: string;
+  username: string;
+  role: "admin";
+}
+
+interface AdminAuthState {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  user: AdminUser;
 }
 
 interface Theme {
@@ -64,7 +73,7 @@ const DEFAULT_THEME: ThemeName = (command.defaultTheme && THEMES[command.default
 
 const COMMANDS = [
   "help", "start", "about", "education", "projects", "project", "whoami", "repo", "github", "linkedin",
-  "email", "resume", "history", "man", "keys", "demo", "stats", "version", "status", "hire", "book", "banner", "clear", "theme", "motion", "sound", "prefs", "ls", "cat", "open", "quest", "secret", "sudo", "rm"
+  "email", "resume", "history", "man", "keys", "demo", "stats", "version", "status", "hire", "book", "banner", "clear", "theme", "motion", "sound", "prefs", "ls", "cat", "open", "quest", "secret", "sudo", "su", "admin", "rm"
 ];
 const ALIASES: Record<string, string> = {
   gh: "github",
@@ -91,6 +100,9 @@ let userInput = "";
 let isSudo = false;
 let isPasswordInput = false;
 let passwordCounter = 0;
+let passwordPromptMode: "sudo" | "su" | null = null;
+let pendingSuUsername = "";
+let adminAuth: AdminAuthState | null = null;
 let bareMode = false;
 let audioCtx: AudioContext | null = null;
 
@@ -111,6 +123,7 @@ const SUDO_PASSWORD = command.password;
 const REPO_LINK = command.repoLink;
 const SOCIAL = command.social;
 const BOOKING_LINK = `https://www.linkedin.com/in/${SOCIAL.linkedin}`;
+const BACKEND_BASE_URL = (command as { backend?: { apiBaseUrl?: string } }).backend?.apiBaseUrl ?? "http://localhost:4000";
 
 const VIRTUAL_FILES: Record<string, string> = {
   "resume.md": (command.resume?.fallback ?? [
@@ -418,6 +431,9 @@ function getTabCompletions(inputRaw: string): string[] {
   if (aliasOrCmd === "project") {
     return getProjectSuggestions(argPrefix).map(complete);
   }
+  if (aliasOrCmd === "admin") {
+    return ["whoami", "logout", "blogs", "config", "analytics"].filter((item) => item.startsWith(argPrefix)).map(complete);
+  }
   return [];
 }
 
@@ -477,6 +493,10 @@ function isCommandInputValid(inputRaw: string): boolean | null {
       if (argStr === "-rf") return true;
       if (argStr.startsWith("-rf ")) return true;
       return false;
+    case "su":
+      return args.length === 1 && !!args[0];
+    case "admin":
+      return ["", "whoami", "logout", "blogs", "config", "analytics"].includes(argStr);
     default:
       return true;
   }
@@ -562,6 +582,130 @@ function runScenario(name: string) {
   scenario.forEach((cmd, idx) => {
     setTimeout(() => commandHandler(String(cmd).toLowerCase()), 350 * (idx + 1));
   });
+}
+
+async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${BACKEND_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    let message = `Request failed (${response.status})`;
+    try {
+      const payload = await response.json() as { message?: string };
+      if (payload?.message) message = payload.message;
+    } catch {
+      // keep fallback message
+    }
+    throw new Error(message);
+  }
+  if (response.status === 204) return {} as T;
+  return response.json() as Promise<T>;
+}
+
+async function apiGet<T>(path: string, accessToken?: string): Promise<T> {
+  const response = await fetch(`${BACKEND_BASE_URL}${path}`, {
+    method: "GET",
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+  });
+  if (!response.ok) {
+    let message = `Request failed (${response.status})`;
+    try {
+      const payload = await response.json() as { message?: string };
+      if (payload?.message) message = payload.message;
+    } catch {
+      // keep fallback message
+    }
+    throw new Error(message);
+  }
+  return response.json() as Promise<T>;
+}
+
+async function loginAdmin(username: string, password: string) {
+  const payload = await apiPost<{
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: number;
+    user: AdminUser;
+  }>("/api/auth/login", { username, password });
+  adminAuth = payload;
+}
+
+async function refreshAdminSession() {
+  if (!adminAuth) throw new Error("No admin session.");
+  const refreshed = await apiPost<{
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: number;
+  }>("/api/auth/refresh", { refreshToken: adminAuth.refreshToken });
+  adminAuth = {
+    ...adminAuth,
+    accessToken: refreshed.accessToken,
+    refreshToken: refreshed.refreshToken,
+    expiresAt: refreshed.expiresAt
+  };
+}
+
+async function getValidAdminToken() {
+  if (!adminAuth) throw new Error("Admin mode is locked.");
+  if (adminAuth.expiresAt - Date.now() < 30_000) {
+    await refreshAdminSession();
+  }
+  return adminAuth.accessToken;
+}
+
+async function logoutAdmin() {
+  if (!adminAuth) return;
+  try {
+    await apiPost("/api/auth/logout", { refreshToken: adminAuth.refreshToken });
+  } finally {
+    adminAuth = null;
+  }
+}
+
+async function getAdminBlogs() {
+  const token = await getValidAdminToken();
+  return apiGet<{ blogs: Array<{ title: string; slug: string; status: string; updatedAt?: string }>; pagination?: { total: number } }>("/api/admin/blogs?limit=20", token);
+}
+
+async function getAdminConfigSummary() {
+  const token = await getValidAdminToken();
+  return apiGet<{ data: Record<string, unknown> | null; updatedAt?: string | null }>("/api/admin/config", token);
+}
+
+async function getAdminAnalyticsSummary() {
+  const token = await getValidAdminToken();
+  return apiGet<{
+    totalEvents: number;
+    uniqueSessions: number;
+    eventTypes: Array<{ _id: string; count: number }>;
+    topCommands: Array<{ _id: string; count: number }>;
+  }>("/api/admin/analytics/summary", token);
+}
+
+function showAdminHelp() {
+  if (!adminAuth) {
+    writeLines(["Admin mode is locked. Use <span class='command'>'su &lt;username&gt;'</span> first.", "<br>"]);
+    return;
+  }
+  writeLines([
+    "<br>",
+    `Admin unlocked for <span class='command'>${adminAuth.user.username}</span>`,
+    "Admin commands:",
+    "- <span class='command'>admin</span> (show this help)",
+    "- <span class='command'>admin whoami</span> (current admin session)",
+    "- <span class='command'>admin logout</span> (lock admin commands)",
+    "- <span class='command'>admin blogs</span> (placeholder for blog manager)",
+    "- <span class='command'>admin config</span> (placeholder for config manager)",
+    "- <span class='command'>admin analytics</span> (placeholder for analytics manager)",
+    "<br>"
+  ]);
+}
+
+function setPromptIdentity(value: string) {
+  if (USER) USER.innerText = value;
+  if (PRE_USER) PRE_USER.innerText = value;
 }
 
 function showMan(topic?: string) {
@@ -827,268 +971,135 @@ function commandHandler(input: string) {
   trackCommandUse(aliasOrCmd);
   checkGuideProgress(normalizedInput);
 
-  switch (aliasOrCmd) {
-    case "clear":
-      setTimeout(() => {
-        if (!TERMINAL || !WRITELINESCOPY) return;
-        TERMINAL.innerHTML = "";
-        TERMINAL.appendChild(WRITELINESCOPY);
-        mutWriteLines = WRITELINESCOPY;
-      });
-      break;
-    case "banner":
-      writeLines(BANNER);
-      registerVisit("banner");
-      break;
-    case "start":
-      runGuidedModeStart();
-      registerVisit("start");
-      break;
-    case "help":
-      if (args[0]) {
-        writeLines(createHelpByType(args[0]));
-      } else {
-        writeLines(HELP);
-      }
-      registerVisit("help");
-      break;
-    case "whoami":
-      writeLines(createWhoami());
-      registerVisit("whoami");
-      break;
-    case "about":
-      writeLines(ABOUT);
-      registerVisit("about");
-      break;
-    case "education":
-      writeLines(EDUCATION);
-      registerVisit("education");
-      break;
-    case "projects":
-      writeLines(PROJECTS);
-      registerVisit("projects");
-      break;
-    case "project":
-      writeLines(projectDeepDive(args.join(" ")));
-      registerVisit("project");
-      break;
-    case "repo":
-      writeLines(["Redirecting to repo...", "<br>"]);
-      setTimeout(() => window.open(REPO_LINK, "_blank"), 300);
-      registerVisit("repo");
-      break;
-    case "linkedin":
-    case "github":
-      writeLines([`Redirecting to ${aliasOrCmd}...`, "<br>"]);
-      setTimeout(() => openTarget(aliasOrCmd), 300);
-      registerVisit(aliasOrCmd);
-      break;
-    case "email":
-      writeLines([`Opening mail client for <span class='command'>${SOCIAL.email}</span>...`, "<br>"]);
-      setTimeout(() => openTarget("email"), 300);
-      registerVisit("email");
-      break;
-    case "resume":
-      writeLines(["Downloading resume PDF...", "If it does not download, add your file at <span class='command'>public/resume.pdf</span> or <span class='command'>res/resume.pdf</span>.", "<br>"]);
-      setTimeout(() => { void downloadResume(); }, 200);
-      registerVisit("resume");
-      break;
-    case "history":
-      showHistory();
-      break;
-    case "man":
-      showMan(args[0]);
-      break;
-    case "keys":
-      showKeys();
-      break;
-    case "demo":
-      if (!args[0]) {
-        writeLines([`Usage: <span class='command'>demo &lt;${getScenarioNames().join("|") || "scenario"}&gt;</span>`, "<br>"]);
-        break;
-      }
-      runScenario(args[0]);
-      break;
-    case "stats":
-      showStats();
-      break;
-    case "version":
-      showVersion();
-      break;
-    case "status":
-      showStatus();
-      break;
-    case "hire":
-      writeLines([
-        "<br>",
-        "Let us build something outstanding.",
-        `Email: <a href='mailto:${SOCIAL.email}'>${SOCIAL.email}</a>`,
-        `LinkedIn: <a href='https://www.linkedin.com/in/${SOCIAL.linkedin}' target='_blank'>/${SOCIAL.linkedin}</a>`,
-        "Quick actions: <span class='cmd-chip' data-command='email'>email</span> <span class='cmd-chip' data-command='book'>book</span> <span class='cmd-chip' data-command='projects'>projects</span>",
-        "<br>"
-      ]);
-      registerVisit("hire");
-      break;
-    case "book":
-      writeLines(["Opening booking/profile link...", "<br>"]);
-      setTimeout(() => window.open(BOOKING_LINK, "_blank"), 300);
-      registerVisit("book");
-      break;
-    case "theme":
-      if (args.length === 0) {
-        writeLines([
-          "<br>",
-          `Active theme: <span class='command'>${SESSION.theme}</span>`,
-          "Available: retro, neon, minimal",
-          "Usage: <span class='command'>theme neon</span>",
-          "<br>"
-        ]);
-        break;
-      }
-      if (args[0] in THEMES) {
-        applyTheme(args[0] as ThemeName);
-        writeLines([`Theme switched to <span class='command'>${args[0]}</span>.`, "<br>"]);
-        registerVisit("theme");
-      } else {
-        writeLines(["Unknown theme.", "<br>"]);
-      }
-      break;
-    case "motion":
-      if (args[0] === "on") SESSION.reducedMotion = true;
-      else if (args[0] === "off") SESSION.reducedMotion = false;
-      else SESSION.reducedMotion = !SESSION.reducedMotion;
-      applyMotionPreference();
-      persistSession();
-      writeLines([`Reduced motion: <span class='command'>${SESSION.reducedMotion ? "on" : "off"}</span>`, "<br>"]);
-      break;
-    case "sound":
-      if (args[0] === "on") SESSION.sound = true;
-      else if (args[0] === "off") SESSION.sound = false;
-      else SESSION.sound = !SESSION.sound;
-      persistSession();
-      writeLines([`Typing sound: <span class='command'>${SESSION.sound ? "on" : "off"}</span>`, "<br>"]);
-      break;
-    case "prefs":
-      if (args[0] === "reset") {
-        resetPreferences();
-        writeLines(["Preferences reset to default and saved in localStorage.", "<br>"]);
-        break;
-      }
-      if (args[0] === "export") {
-        writeLines([
-          "<br>",
-          "Stored preferences:",
-          JSON.stringify(getPreferenceSnapshot(), null, 2).replace(/\n/g, "<br>").replace(/ /g, "&nbsp;"),
-          "<br>"
-        ]);
-        break;
-      }
-      writeLines([
-        "<br>",
-        "Preferences are stored in localStorage.",
-        `Current: theme=<span class='command'>${SESSION.theme}</span>, motion=<span class='command'>${SESSION.reducedMotion ? "on" : "off"}</span>, sound=<span class='command'>${SESSION.sound ? "on" : "off"}</span>`,
-        "Commands: <span class='command'>prefs export</span> <span class='command'>prefs reset</span>",
-        "<br>"
-      ]);
-      break;
-    case "ls": {
-      const items = listVirtual(args[0]);
-      if (!items.length) {
-        writeLines(["Path not found.", "<br>"]);
-      } else {
-        writeLines(["<br>", ...items, "<br>"]);
-      }
-      break;
+  if (aliasOrCmd === "su") {
+    const username = args[0];
+    if (!username) {
+      writeLines(["Usage: <span class='command'>'su &lt;admin-username&gt;'</span>", "<br>"]);
+      return;
     }
-    case "cat": {
-      const file = args.join(" ");
-      if (!file) {
-        writeLines(["Usage: <span class='command'>'cat &lt;file&gt;'</span>", "<br>"]);
-        break;
-      }
-      const content = readVirtualFile(file);
-      if (!content) {
-        writeLines(["File not found.", "<br>"]);
-        break;
-      }
-      writeLines(["<br>", ...content.split("\n"), "<br>"]);
-      if (file === "resume.md") registerVisit("cat resume.md");
-      break;
+    if (!PASSWORD || !INPUT_HIDDEN) {
+      writeLines(["Password prompt unavailable.", "<br>"]);
+      return;
     }
-    case "open": {
-      const target = args.join(" ");
-      if (!target) {
-        writeLines(["Usage: <span class='command'>'open &lt;repo|github|linkedin|email&gt;'</span>", "<br>"]);
-        break;
-      }
-      if (target.startsWith("project ")) {
-        const projectArg = target.replace("project ", "");
-        const selected = projectDeepDive(projectArg);
-        writeLines(selected);
-        break;
-      }
-      if (!openTarget(target)) {
-        writeLines(["Unsupported open target.", "<br>"]);
-      } else {
-        writeLines([`Opening ${target}...`, "<br>"]);
-      }
-      break;
-    }
-    case "quest": {
-      const completed = QUEST_STEPS.filter((item) => SESSION.visited.includes(item.id));
-      const pending = QUEST_STEPS.filter((item) => !SESSION.visited.includes(item.id));
-      writeLines([
-        "<br>",
-        `Quest progress: ${completed.length}/${QUEST_STEPS.length}`,
-        `Completed: ${completed.map((item) => item.label).join(", ") || "none"}`,
-        `Left: ${pending.map((item) => item.label).join(", ") || "none"}`,
-        SESSION.unlockedSecret ? "Secret unlocked: yes" : "Secret unlocked: no",
-        "<br>"
-      ]);
-      break;
-    }
-    case "secret":
-      if (!SESSION.unlockedSecret) {
-        writeLines(["Secret is locked. Run <span class='command'>'quest'</span> for clues.", "<br>"]);
-      } else {
-        writeLines([
-          "<br>",
-          "Unlocked: Project Night Terminal",
-          "A private concept for command-driven storytelling and 3D terminal transitions.",
-          "If you want access, run <span class='command'>'email'</span> with subject: Secret Project.",
-          "<br>"
-        ]);
-      }
-      break;
-    case "sudo":
-      if (!PASSWORD) return;
-      isPasswordInput = true;
-      USERINPUT.disabled = true;
-      if (INPUT_HIDDEN) INPUT_HIDDEN.style.display = "none";
-      PASSWORD.style.display = "block";
-      setTimeout(() => PASSWORD_INPUT.focus(), 100);
-      break;
-    case "rm":
-      if (args[0] === "-rf") {
-        if (isSudo) {
-          writeLines(["Usage: <span class='command'>'rm -rf &lt;dir&gt;'</span>", "<br>"]);
-        } else {
-          writeLines(["Permission not granted.", "<br>"]);
-        }
-        break;
-      }
-      writeLines(DEFAULT(input));
-      break;
-    default: {
-      const notFound = DEFAULT(input);
-      const suggestions = getCommandSuggestions(aliasOrCmd);
-      if (suggestions.length > 0) {
-        notFound.push(`Did you mean: ${suggestions.map((cmd) => `<span class='cmd-chip' data-command='${cmd}'>${cmd}</span>`).join(" ")}`);
-      }
-      writeLines(notFound);
-      break;
-    }
+    pendingSuUsername = username.trim().toLowerCase();
+    passwordPromptMode = "su";
+    isPasswordInput = true;
+    USERINPUT.disabled = true;
+    INPUT_HIDDEN.style.display = "none";
+    PASSWORD.style.display = "block";
+    PASSWORD_INPUT.value = "";
+    setTimeout(() => PASSWORD_INPUT.focus(), 100);
+    writeLines(["Enter admin password:", "<br>"]);
+    return;
   }
+
+  if (aliasOrCmd === "admin") {
+    const action = (args[0] ?? "").toLowerCase();
+    if (!adminAuth) {
+      writeLines(["Admin mode is locked. Use <span class='command'>'su &lt;username&gt;'</span>.", "<br>"]);
+      return;
+    }
+    if (!action) {
+      showAdminHelp();
+      return;
+    }
+    if (action === "whoami") {
+      writeLines([
+        "<br>",
+        `Role: <span class='command'>${adminAuth.user.role}</span>`,
+        `Username: <span class='command'>${adminAuth.user.username}</span>`,
+        "<br>"
+      ]);
+      return;
+    }
+    if (action === "logout") {
+      void logoutAdmin().finally(() => {
+        setPromptIdentity(command.username);
+        writeLines(["Admin locked. Back to visitor mode.", "<br>"]);
+      });
+      return;
+    }
+    if (action === "blogs" || action === "config" || action === "analytics") {
+      void (async () => {
+        try {
+          if (action === "blogs") {
+            const data = await getAdminBlogs();
+            const lines = data.blogs.slice(0, 12).map((item) => `- ${item.title} (${item.status}) [${item.slug}]`);
+            writeLines(["<br>", `Admin blogs: ${data.pagination?.total ?? data.blogs.length}`, ...(lines.length ? lines : ["No blogs found."]), "<br>"]);
+            return;
+          }
+          if (action === "config") {
+            const data = await getAdminConfigSummary();
+            const keys = data.data ? Object.keys(data.data) : [];
+            writeLines(["<br>", `Config keys: ${keys.length}`, ...(keys.slice(0, 20).map((k) => `- ${k}`)), "<br>"]);
+            return;
+          }
+          const data = await getAdminAnalyticsSummary();
+          writeLines([
+            "<br>",
+            `Total events: ${data.totalEvents}`,
+            `Unique sessions: ${data.uniqueSessions}`,
+            `Top event types: ${(data.eventTypes ?? []).slice(0, 5).map((row) => `${row._id}:${row.count}`).join(", ") || "none"}`,
+            `Top commands: ${(data.topCommands ?? []).slice(0, 5).map((row) => `${row._id}:${row.count}`).join(", ") || "none"}`,
+            "<br>"
+          ]);
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : "Admin API request failed.";
+          writeLines([message, "<br>"]);
+        }
+      })();
+      return;
+    }
+    writeLines(["Unknown admin subcommand. Run <span class='command'>'admin'</span>.", "<br>"]);
+    return;
+  }
+
+  executeCommand({
+    input,
+    aliasOrCmd,
+    args,
+    writeLines,
+    resetWriteLines: () => {
+      if (!TERMINAL || !WRITELINESCOPY) return;
+      TERMINAL.innerHTML = "";
+      TERMINAL.appendChild(WRITELINESCOPY);
+      mutWriteLines = WRITELINESCOPY;
+    },
+    registerVisit,
+    runGuidedModeStart,
+    projectDeepDive,
+    openTarget,
+    downloadResume,
+    showHistory,
+    showMan,
+    showKeys,
+    getScenarioNames,
+    runScenario,
+    showStats,
+    showVersion,
+    showStatus,
+    session: SESSION,
+    themes: THEMES,
+    applyTheme,
+    applyMotionPreference,
+    persistSession,
+    resetPreferences,
+    getPreferenceSnapshot,
+    listVirtual,
+    readVirtualFile,
+    questSteps: QUEST_STEPS,
+    social: SOCIAL,
+    bookingLink: BOOKING_LINK,
+    passwordEl: PASSWORD,
+    userInputEl: USERINPUT,
+    inputHiddenEl: INPUT_HIDDEN,
+    passwordInputEl: PASSWORD_INPUT,
+    setPasswordInputMode: (value) => {
+      isPasswordInput = value;
+    },
+    isSudo,
+    getCommandSuggestions
+  });
 
   updateQuestProgress();
 }
@@ -1098,10 +1109,12 @@ function writeLines(message: string[]) {
 }
 
 function displayText(item: string, idx: number) {
-  const delay = SESSION.reducedMotion ? 0 : 35 * idx;
+  const isHelpLayout = item.includes("help-layout");
+  const delay = SESSION.reducedMotion || isHelpLayout ? 0 : 35 * idx;
   setTimeout(() => {
     if (!mutWriteLines) return;
     const p = document.createElement("p");
+    if (isHelpLayout) p.classList.add("no-line-anim");
     p.innerHTML = item;
     mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
     scrollToBottom();
@@ -1115,10 +1128,39 @@ function revertPasswordChanges() {
   INPUT_HIDDEN.style.display = "block";
   PASSWORD.style.display = "none";
   isPasswordInput = false;
+  passwordPromptMode = null;
   setTimeout(() => USERINPUT.focus(), 150);
 }
 
 function passwordHandler() {
+  if (passwordPromptMode === "su") {
+    const password = PASSWORD_INPUT.value;
+    PASSWORD_INPUT.value = "";
+    if (!pendingSuUsername) {
+      writeLines(["Missing admin username. Run <span class='command'>'su &lt;username&gt;'</span> again.", "<br>"]);
+      revertPasswordChanges();
+      return;
+    }
+    void loginAdmin(pendingSuUsername, password)
+      .then(() => {
+        setPromptIdentity(adminAuth?.user.username ?? command.username);
+        writeLines([
+          "<br>",
+          `Admin unlocked. Welcome <span class='command'>${adminAuth?.user.username ?? "admin"}</span>.`,
+          "Run <span class='command'>'admin'</span> to see admin commands.",
+          "<br>"
+        ]);
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "Admin login failed.";
+        writeLines(["<br>", message, "<br>"]);
+      })
+      .finally(() => {
+        revertPasswordChanges();
+      });
+    return;
+  }
+
   if (passwordCounter === 2) {
     writeLines(["<br>", "INCORRECT PASSWORD.", "PERMISSION NOT GRANTED.", "<br>"]);
     revertPasswordChanges();
@@ -1176,6 +1218,7 @@ function initEventListeners() {
   if (USER) USER.innerText = command.username;
   if (PRE_HOST) PRE_HOST.innerText = command.hostname;
   if (PRE_USER) PRE_USER.innerText = command.username;
+  setPromptIdentity(command.username);
 
   window.addEventListener("load", () => {
     applyTheme(SESSION.theme);
