@@ -14,6 +14,7 @@ interface SessionState {
   guideStep: number;
   history: string[];
   usage: Record<string, number>;
+  adminMode: boolean;
 }
 
 interface AdminUser {
@@ -27,6 +28,17 @@ interface AdminAuthState {
   refreshToken: string;
   expiresAt: number;
   user: AdminUser;
+}
+
+interface BlogEditorDraft {
+  title: string;
+  slug: string;
+  excerpt: string;
+  tags: string[];
+  status: "draft" | "published";
+  lines: string[];
+  coverImage: { url: string; publicId: string } | null;
+  images: Array<{ url: string; publicId: string }>;
 }
 
 interface Theme {
@@ -47,6 +59,10 @@ interface Theme {
 }
 
 const STORAGE_KEY = "webshell.session.v4";
+const ANALYTICS_SESSION_KEY = "webshell.analytics.session.v1";
+const ADMIN_AUTH_KEY = "webshell.admin.auth.v1";
+const RESUME_BLOB_REVOKE_DELAY_MS = 60_000;
+const IMAGE_PICKER_CANCEL_DELAY_MS = 150;
 const fallbackTheme: Theme = {
   bg: command.colors.background,
   fg: command.colors.foreground,
@@ -71,9 +87,38 @@ const DEFAULT_THEME: ThemeName = (command.defaultTheme && THEMES[command.default
   ? command.defaultTheme
   : (Object.keys(THEMES)[0] ?? "default");
 
+const ANALYTICS_SESSION_ID = (() => {
+  const existing = localStorage.getItem(ANALYTICS_SESSION_KEY);
+  if (existing) return existing;
+  const created = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  localStorage.setItem(ANALYTICS_SESSION_KEY, created);
+  return created;
+})();
+
+function loadAdminAuth(): AdminAuthState | null {
+  const raw = localStorage.getItem(ADMIN_AUTH_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as AdminAuthState;
+    if (!parsed?.accessToken || !parsed?.refreshToken || !parsed?.expiresAt || !parsed?.user?.username) return null;
+    return parsed;
+  } catch {
+    localStorage.removeItem(ADMIN_AUTH_KEY);
+    return null;
+  }
+}
+
+function persistAdminAuth(auth: AdminAuthState | null) {
+  if (!auth) {
+    localStorage.removeItem(ADMIN_AUTH_KEY);
+    return;
+  }
+  localStorage.setItem(ADMIN_AUTH_KEY, JSON.stringify(auth));
+}
+
 const COMMANDS = [
   "help", "start", "about", "education", "projects", "project", "whoami", "repo", "github", "linkedin",
-  "email", "resume", "history", "man", "keys", "demo", "stats", "version", "status", "hire", "book", "banner", "clear", "theme", "motion", "sound", "prefs", "ls", "cat", "open", "quest", "secret", "sudo", "su", "admin", "rm"
+  "email", "resume", "history", "man", "keys", "demo", "stats", "version", "status", "hire", "book", "banner", "clear", "theme", "motion", "sound", "prefs", "ls", "cat", "open", "blogs", "blog", "quest", "secret", "sudo", "su", "admin", "rm"
 ];
 const ALIASES: Record<string, string> = {
   gh: "github",
@@ -102,7 +147,26 @@ let isPasswordInput = false;
 let passwordCounter = 0;
 let passwordPromptMode: "sudo" | "su" | null = null;
 let pendingSuUsername = "";
-let adminAuth: AdminAuthState | null = null;
+let adminAuth: AdminAuthState | null = loadAdminAuth();
+let isBlogEditorMode = false;
+let blogDraft: BlogEditorDraft | null = null;
+let blogEditId: string | null = null;
+let pendingBlogNewTitle = false;
+let editorInputMode: "insert" | "command" = "insert";
+let editorStatusMessage = "";
+let editorLiveInput = "";
+let editorCursorPos = 0;
+let editorEditingLineIndex: number | null = null;
+let isEditorSaving = false;
+let editorOverlayEl: HTMLDivElement | null = null;
+let listenersInitialized = false;
+let swRegistered = false;
+let blogPickerRequestId = 0;
+let blogPicker: {
+  action: "edit" | "view" | "publish" | "delete";
+  items: Array<{ _id: string; title: string; status: string; slug: string }>;
+  selectedIndex: number;
+} | null = null;
 let bareMode = false;
 let audioCtx: AudioContext | null = null;
 
@@ -161,7 +225,8 @@ const DEFAULT_SESSION: SessionState = {
   visited: [],
   guideStep: -1,
   history: [],
-  usage: {}
+  usage: {},
+  adminMode: false
 };
 
 const SESSION = loadSession();
@@ -186,7 +251,8 @@ function loadSession(): SessionState {
       visited: Array.isArray(parsed.visited) ? parsed.visited.filter(Boolean) : [],
       guideStep: typeof parsed.guideStep === "number" ? parsed.guideStep : -1,
       history: Array.isArray(parsed.history) ? parsed.history.filter(Boolean).slice(-80) : [],
-      usage: parsed.usage && typeof parsed.usage === "object" ? parsed.usage : {}
+      usage: parsed.usage && typeof parsed.usage === "object" ? parsed.usage : {},
+      adminMode: false
     };
   } catch {
     console.warn("Failed to parse session state. Resetting local session.");
@@ -217,6 +283,7 @@ function resetPreferences() {
   SESSION.guideStep = -1;
   SESSION.history = [];
   SESSION.usage = {};
+  SESSION.adminMode = false;
   HISTORY.length = 0;
   historyIdx = 0;
   tempInput = "";
@@ -259,6 +326,97 @@ function applyMotionPreference() {
   document.body.classList.toggle("reduced-motion", SESSION.reducedMotion);
 }
 
+function ensureEditorOverlay() {
+  if (editorOverlayEl && editorOverlayEl.isConnected && editorOverlayEl.parentElement === TERMINAL) return editorOverlayEl;
+  if (editorOverlayEl && !editorOverlayEl.isConnected) editorOverlayEl = null;
+  if (!TERMINAL) return null;
+  const overlay = document.createElement("div");
+  overlay.id = "editor-overlay";
+  overlay.style.display = "none";
+  TERMINAL.prepend(overlay);
+  editorOverlayEl = overlay;
+  return overlay;
+}
+
+function renderEditorOverlay() {
+  const overlay = ensureEditorOverlay();
+  if (!overlay) return;
+  if (blogPicker) {
+    renderBlogPicker();
+    return;
+  }
+  if (!isBlogEditorMode || !blogDraft) {
+    overlay.style.display = "none";
+    overlay.innerHTML = "";
+    return;
+  }
+  overlay.style.display = "block";
+  const lines = blogDraft.lines.length > 0 ? blogDraft.lines : [""];
+  const modeLabel = editorInputMode === "insert" ? "-- INSERT --" : "-- COMMAND --";
+  const status = editorStatusMessage || `:${editorInputMode === "command" ? "ready" : "type text, Esc for command mode"}`;
+  const clampedCursor = Math.max(0, Math.min(editorCursorPos, editorLiveInput.length));
+  const before = escapeHtml(editorLiveInput.slice(0, clampedCursor));
+  const currentChar = editorLiveInput.charAt(clampedCursor);
+  const caretChar = escapeHtml(currentChar || " ");
+  const after = escapeHtml(editorLiveInput.slice(Math.min(clampedCursor + 1, editorLiveInput.length)));
+  const cmdPrefix = editorInputMode === "command" ? ":" : "";
+  overlay.innerHTML = [
+    "<div class='editor-header'>",
+    `  "${blogDraft.slug}.md" ${blogEditId ? "[EDIT]" : "[NEW]"}  ${blogDraft.status.toUpperCase()}`,
+    "</div>",
+    "<div class='editor-body'>",
+    ...lines.map((line, idx) => `<div class='editor-line ${editorEditingLineIndex === idx ? "editor-line-editing" : ""}'><span class='editor-lineno'>${String(idx + 1).padStart(3, " ")}</span> ${line || "&nbsp;"}</div>`),
+    `<div class='editor-cmdline'>${cmdPrefix}${before}<span class='editor-caret'>${caretChar}</span>${after}</div>`,
+    "</div>",
+    `<div class='editor-status'><span>${modeLabel}</span><span>${status}</span></div>`
+  ].join("");
+}
+
+function setEditorStatus(message: string) {
+  editorStatusMessage = message;
+  renderEditorOverlay();
+}
+
+function toSlug(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function normalizeBlogTitle(value: string) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function isValidBlogTitle(value: string) {
+  return value.length >= 3 && value.length <= 120;
+}
+
+function isValidImageUrlCandidate(value: string) {
+  try {
+    const parsed = new URL(value);
+    if (!(parsed.protocol === "http:" || parsed.protocol === "https:")) return false;
+    const ext = parsed.pathname.toLowerCase();
+    return /\.(png|jpe?g|gif|webp|avif|svg)$/.test(ext) || parsed.pathname.length > 1;
+  } catch {
+    return false;
+  }
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function escapeHtmlAttr(value: string) {
+  return escapeHtml(value)
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function playKeySound() {
   if (!SESSION.sound) return;
   const AudioContextRef = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -278,6 +436,43 @@ function playKeySound() {
 }
 
 function userInputHandler(e: KeyboardEvent) {
+  if (blogPicker) {
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      blogPicker.selectedIndex = Math.max(0, blogPicker.selectedIndex - 1);
+      renderBlogPicker();
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      blogPicker.selectedIndex = Math.min(blogPicker.items.length - 1, blogPicker.selectedIndex + 1);
+      renderBlogPicker();
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      chooseBlogPickerSelection();
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      cancelBlogPicker();
+      return;
+    }
+  }
+
+  if (isBlogEditorMode && e.key === "Escape") {
+    e.preventDefault();
+    editorInputMode = editorInputMode === "insert" ? "command" : "insert";
+    editorEditingLineIndex = null;
+    setEditorStatus(editorInputMode === "command" ? ": (command) :edit <line> :wq :q! :show :img <line> [url] :cover [url]" : "-- INSERT --");
+    USERINPUT.value = "";
+    editorLiveInput = "";
+    editorCursorPos = 0;
+    updateInputState();
+    return;
+  }
+
   if (e.key.length === 1 || e.key === "Backspace") {
     playKeySound();
   }
@@ -297,12 +492,27 @@ function userInputHandler(e: KeyboardEvent) {
       updateInputState();
       break;
     case "ArrowUp":
-      arrowKeys(e.key);
-      e.preventDefault();
+      if (isBlogEditorMode) {
+        setTimeout(() => updateInputState(), 0);
+      } else {
+        arrowKeys(e.key);
+        e.preventDefault();
+      }
       break;
     case "ArrowDown":
-      arrowKeys(e.key);
-      e.preventDefault();
+      if (isBlogEditorMode) {
+        setTimeout(() => updateInputState(), 0);
+      } else {
+        arrowKeys(e.key);
+        e.preventDefault();
+      }
+      break;
+    case "ArrowLeft":
+    case "ArrowRight":
+    case "Home":
+    case "End":
+    case "Delete":
+      if (isBlogEditorMode) setTimeout(() => updateInputState(), 0);
       break;
     case "Tab":
       tabKey();
@@ -314,7 +524,17 @@ function userInputHandler(e: KeyboardEvent) {
 function enterKey() {
   if (!mutWriteLines || !PROMPT) return;
   const resetInput = "";
-  userInput = USERINPUT.value.trim();
+  const rawInput = USERINPUT.value;
+  userInput = rawInput.trim();
+  if (isBlogEditorMode) {
+    handleBlogEditorInput(rawInput);
+    USERINPUT.value = resetInput;
+    userInput = resetInput;
+    editorLiveInput = resetInput;
+    editorCursorPos = 0;
+    updateInputState();
+    return;
+  }
   const output = bareMode ? userInput : `<span class='output'>${userInput}</span>`;
 
   if (userInput.length > 0) {
@@ -325,7 +545,8 @@ function enterKey() {
   }
 
   const div = document.createElement("div");
-  div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${output}`;
+  const promptMarkup = PROMPT?.innerHTML ?? `${escapeHtml(command.username)}@${escapeHtml(command.hostname)}:$ ~`;
+  div.innerHTML = `<span id="prompt">${promptMarkup}</span> ${output}`;
   if (mutWriteLines.parentNode) {
     mutWriteLines.parentNode.insertBefore(div, mutWriteLines);
   }
@@ -351,9 +572,12 @@ function tabKey() {
     setTimeout(() => USERINPUT.classList.remove("tab-flash"), 300);
     updateInputState();
   } else if (matches.length > 1) {
+    const safeChips = matches
+      .map((m) => `<span class='cmd-chip' data-command='${escapeHtmlAttr(m)}'>${escapeHtml(m)}</span>`)
+      .join(" ");
     writeLines([
       "<br>",
-      `Suggestions: ${matches.map((m) => `<span class='cmd-chip' data-command='${m}'>${m}</span>`).join(" ")}`,
+      `Suggestions: ${safeChips}`,
       "<br>"
     ]);
   }
@@ -431,8 +655,14 @@ function getTabCompletions(inputRaw: string): string[] {
   if (aliasOrCmd === "project") {
     return getProjectSuggestions(argPrefix).map(complete);
   }
+  if (aliasOrCmd === "blog") {
+    return ["search", "view"].filter((item) => item.startsWith(argPrefix)).map(complete);
+  }
+  if (aliasOrCmd === "blogs") {
+    return ["search", "tag"].filter((item) => item.startsWith(argPrefix)).map(complete);
+  }
   if (aliasOrCmd === "admin") {
-    return ["whoami", "logout", "blogs", "config", "analytics"].filter((item) => item.startsWith(argPrefix)).map(complete);
+    return ["whoami", "logout", "blogs", "config", "analytics", "blog-new", "blog-edit", "blog-delete", "blog-publish", "blog-view", "blog-select"].filter((item) => item.startsWith(argPrefix)).map(complete);
   }
   return [];
 }
@@ -496,13 +726,23 @@ function isCommandInputValid(inputRaw: string): boolean | null {
     case "su":
       return args.length === 1 && !!args[0];
     case "admin":
-      return ["", "whoami", "logout", "blogs", "config", "analytics"].includes(argStr);
+      return argStr === "" || argStr.startsWith("whoami") || argStr.startsWith("logout") || argStr.startsWith("blogs") || argStr.startsWith("config") || argStr.startsWith("analytics") || argStr === "blog-new" || argStr === "blog-edit" || argStr.startsWith("blog-edit ") || argStr === "blog-delete" || argStr.startsWith("blog-delete ") || argStr === "blog-publish" || argStr.startsWith("blog-publish ") || argStr === "blog-view" || argStr.startsWith("blog-view ") || argStr.startsWith("blog-select ");
+    case "blogs":
+      return argStr === "" || argStr.startsWith("search ") || argStr.startsWith("tag ");
+    case "blog":
+      return argStr.startsWith("view ") || argStr.startsWith("search ");
     default:
       return true;
   }
 }
 
 function updateInputState() {
+  if (isBlogEditorMode) {
+    editorLiveInput = USERINPUT.value;
+    editorCursorPos = USERINPUT.selectionStart ?? USERINPUT.value.length;
+    renderEditorOverlay();
+    return;
+  }
   const validity = isCommandInputValid(USERINPUT.value);
   USERINPUT.classList.remove("command-valid", "command-invalid");
   if (validity === true) USERINPUT.classList.add("command-valid");
@@ -564,7 +804,7 @@ async function downloadResume() {
     document.body.appendChild(link);
     link.click();
     link.remove();
-    URL.revokeObjectURL(blobUrl);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), RESUME_BLOB_REVOKE_DELAY_MS);
   } catch {
     writeLines(["Failed to fetch resume PDF. Showing fallback resume.", "<br>", ...(command.resume?.fallback ?? VIRTUAL_FILES["resume.md"].split("\n")), "<br>"]);
   }
@@ -604,6 +844,28 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function renderBar(count: number, max: number, width = 24) {
+  const safeMax = Math.max(1, max);
+  const filled = Math.max(1, Math.round((count / safeMax) * width));
+  return `${"█".repeat(filled)}${"░".repeat(Math.max(0, width - filled))}`;
+}
+
+async function trackAnalyticsEvent(eventType: string, commandName?: string, metadata?: Record<string, unknown>) {
+  if (!command.telemetry?.enabled) return;
+  try {
+    await apiPost("/api/analytics/event", {
+      sessionId: ANALYTICS_SESSION_ID,
+      eventType,
+      command: commandName,
+      path: window.location.pathname,
+      referrer: document.referrer || undefined,
+      metadata
+    });
+  } catch {
+    // Do not block UX on telemetry failures.
+  }
+}
+
 async function apiGet<T>(path: string, accessToken?: string): Promise<T> {
   const response = await fetch(`${BACKEND_BASE_URL}${path}`, {
     method: "GET",
@@ -630,6 +892,9 @@ async function loginAdmin(username: string, password: string) {
     user: AdminUser;
   }>("/api/auth/login", { username, password });
   adminAuth = payload;
+  persistAdminAuth(payload);
+  SESSION.adminMode = true;
+  persistSession();
 }
 
 async function refreshAdminSession() {
@@ -645,6 +910,7 @@ async function refreshAdminSession() {
     refreshToken: refreshed.refreshToken,
     expiresAt: refreshed.expiresAt
   };
+  persistAdminAuth(adminAuth);
 }
 
 async function getValidAdminToken() {
@@ -661,12 +927,15 @@ async function logoutAdmin() {
     await apiPost("/api/auth/logout", { refreshToken: adminAuth.refreshToken });
   } finally {
     adminAuth = null;
+    persistAdminAuth(null);
+    SESSION.adminMode = false;
+    persistSession();
   }
 }
 
 async function getAdminBlogs() {
   const token = await getValidAdminToken();
-  return apiGet<{ blogs: Array<{ title: string; slug: string; status: string; updatedAt?: string }>; pagination?: { total: number } }>("/api/admin/blogs?limit=20", token);
+  return apiGet<{ blogs: Array<{ _id: string; title: string; slug: string; status: string; updatedAt?: string }>; pagination?: { total: number } }>("/api/admin/blogs?limit=20", token);
 }
 
 async function getAdminConfigSummary() {
@@ -684,6 +953,195 @@ async function getAdminAnalyticsSummary() {
   }>("/api/admin/analytics/summary", token);
 }
 
+async function getPublicBlogs(search?: string, tag?: string) {
+  const qs = new URLSearchParams();
+  qs.set("limit", "20");
+  if (search) qs.set("search", search);
+  if (tag) qs.set("tag", tag);
+  return apiGet<{
+    blogs: Array<{ title: string; slug: string; excerpt: string; tags?: string[]; publishedAt?: string }>;
+    pagination?: { total: number; page: number; limit: number };
+  }>(`/api/blogs?${qs.toString()}`);
+}
+
+async function getPublicBlogBySlug(slug: string) {
+  return apiGet<{
+    blog: {
+      title: string;
+      slug: string;
+      excerpt: string;
+      content: string;
+      tags?: string[];
+      publishedAt?: string;
+    };
+  }>(`/api/blogs/${encodeURIComponent(slug)}`);
+}
+
+async function createAdminBlog(payload: {
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+  tags: string[];
+  status: "draft" | "published";
+  coverImage?: { url: string; publicId: string } | null;
+  images?: Array<{ url: string; publicId: string }>;
+}) {
+  const token = await getValidAdminToken();
+  const response = await fetch(`${BACKEND_BASE_URL}/api/admin/blogs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const payloadErr = await response.json().catch(() => ({ message: `Request failed (${response.status})` })) as { message?: string };
+    throw new Error(payloadErr.message ?? "Failed to create blog.");
+  }
+  return response.json() as Promise<{ blog: { _id: string; title: string; slug: string; status: string } }>;
+}
+
+async function publishAdminBlog(id: string) {
+  const token = await getValidAdminToken();
+  const response = await fetch(`${BACKEND_BASE_URL}/api/admin/blogs/${encodeURIComponent(id)}/publish`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    const payloadErr = await response.json().catch(() => ({ message: `Request failed (${response.status})` })) as { message?: string };
+    throw new Error(payloadErr.message ?? "Failed to publish blog.");
+  }
+  return response.json() as Promise<{ blog: { _id: string; title: string; status: string } }>;
+}
+
+async function deleteAdminBlog(id: string) {
+  const token = await getValidAdminToken();
+  const response = await fetch(`${BACKEND_BASE_URL}/api/admin/blogs/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok && response.status !== 204) {
+    const payloadErr = await response.json().catch(() => ({ message: `Request failed (${response.status})` })) as { message?: string };
+    throw new Error(payloadErr.message ?? "Failed to delete blog.");
+  }
+}
+
+async function getAdminBlogById(id: string) {
+  const token = await getValidAdminToken();
+  return apiGet<{
+    blog: {
+      _id: string;
+      title: string;
+      slug: string;
+      excerpt: string;
+      content?: string;
+      tags?: string[];
+      status: "draft" | "published";
+      coverImage?: { url?: string; publicId?: string } | null;
+      images?: Array<{ url: string; publicId: string }>;
+    }
+  }>(`/api/admin/blogs/${encodeURIComponent(id)}`, token);
+}
+
+async function updateAdminBlog(id: string, payload: {
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+  tags: string[];
+  status: "draft" | "published";
+  coverImage: { url: string; publicId: string } | null;
+  images: Array<{ url: string; publicId: string }>;
+}) {
+  const token = await getValidAdminToken();
+  const response = await fetch(`${BACKEND_BASE_URL}/api/admin/blogs/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const payloadErr = await response.json().catch(() => ({ message: `Request failed (${response.status})` })) as { message?: string };
+    throw new Error(payloadErr.message ?? "Failed to update blog.");
+  }
+  return response.json() as Promise<{ blog: { _id: string; title: string; slug: string; status: string } }>;
+}
+
+async function uploadAdminImageFromUrl(url: string) {
+  const token = await getValidAdminToken();
+  const fileResponse = await fetch(url);
+  if (!fileResponse.ok) throw new Error("Unable to fetch image URL.");
+  const blob = await fileResponse.blob();
+  const file = new File([blob], "image-upload", { type: blob.type || "image/jpeg" });
+  const form = new FormData();
+  form.append("image", file);
+
+  const response = await fetch(`${BACKEND_BASE_URL}/api/admin/uploads/image`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form
+  });
+  if (!response.ok) {
+    const payloadErr = await response.json().catch(() => ({ message: `Request failed (${response.status})` })) as { message?: string };
+    throw new Error(payloadErr.message ?? "Failed to upload image.");
+  }
+  return response.json() as Promise<{ url: string; publicId: string }>;
+}
+
+async function uploadAdminImageFile(file: File) {
+  const token = await getValidAdminToken();
+  const form = new FormData();
+  form.append("image", file);
+  const response = await fetch(`${BACKEND_BASE_URL}/api/admin/uploads/image`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form
+  });
+  if (!response.ok) {
+    const payloadErr = await response.json().catch(() => ({ message: `Request failed (${response.status})` })) as { message?: string };
+    throw new Error(payloadErr.message ?? "Failed to upload image.");
+  }
+  return response.json() as Promise<{ url: string; publicId: string }>;
+}
+
+function pickLocalImageFile() {
+  return new Promise<File>((resolve, reject) => {
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.accept = "image/*";
+    picker.style.display = "none";
+    document.body.appendChild(picker);
+    let done = false;
+    const cleanup = () => {
+      if (picker.parentNode) picker.parentNode.removeChild(picker);
+    };
+    picker.addEventListener("change", () => {
+      done = true;
+      const file = picker.files?.[0];
+      cleanup();
+      if (!file) {
+        reject(new Error("No file selected."));
+        return;
+      }
+      resolve(file);
+    }, { once: true });
+    window.addEventListener("focus", () => {
+      setTimeout(() => {
+        if (!done) {
+          done = true;
+          cleanup();
+          reject(new Error("Image selection cancelled."));
+        }
+      }, IMAGE_PICKER_CANCEL_DELAY_MS);
+    }, { once: true });
+    picker.click();
+  });
+}
+
 function showAdminHelp() {
   if (!adminAuth) {
     writeLines(["Admin mode is locked. Use <span class='command'>'su &lt;username&gt;'</span> first.", "<br>"]);
@@ -699,8 +1157,324 @@ function showAdminHelp() {
     "- <span class='command'>admin blogs</span> (placeholder for blog manager)",
     "- <span class='command'>admin config</span> (placeholder for config manager)",
     "- <span class='command'>admin analytics</span> (placeholder for analytics manager)",
+    "- <span class='command'>admin blog-new</span> (opens vim-like editor)",
+    "- <span class='command'>admin blog-edit [id]</span> (if no id, opens selector list)",
+    "- <span class='command'>admin blog-view [id]</span> <span class='command'>admin blog-publish [id]</span> <span class='command'>admin blog-delete [id]</span>",
+    "- <span class='command'>admin blog-select <edit|view|publish|delete></span> (force selector mode)",
     "<br>"
   ]);
+}
+
+function startBlogEditor(draft: BlogEditorDraft, editId: string | null = null) {
+  isBlogEditorMode = true;
+  editorInputMode = "insert";
+  editorStatusMessage = "";
+  editorLiveInput = "";
+  editorCursorPos = 0;
+  editorEditingLineIndex = null;
+  isEditorSaving = false;
+  blogDraft = draft;
+  blogEditId = editId;
+  if (blogPicker) cancelBlogPicker();
+  document.body.classList.add("editor-mode");
+  const overlay = ensureEditorOverlay();
+  if (mutWriteLines && WRITELINESCOPY) {
+    while (mutWriteLines.previousSibling) {
+      const prev = mutWriteLines.previousSibling;
+      if (!prev) break;
+      if (overlay && prev === overlay) break;
+      mutWriteLines.parentNode?.removeChild(prev);
+    }
+  }
+  if (INPUT_HIDDEN) INPUT_HIDDEN.style.display = "block";
+  setEditorStatus("INSERT: type text | Esc command | :edit <line> | :wq save | :q! quit | :img <line> | :cover");
+  renderEditorOverlay();
+  setTimeout(() => USERINPUT.focus(), 30);
+}
+
+function leaveBlogEditor() {
+  isBlogEditorMode = false;
+  blogDraft = null;
+  blogEditId = null;
+  editorStatusMessage = "";
+  editorLiveInput = "";
+  editorCursorPos = 0;
+  editorEditingLineIndex = null;
+  isEditorSaving = false;
+  editorInputMode = "insert";
+  document.body.classList.remove("editor-mode");
+  document.body.classList.remove("picker-mode");
+  if (INPUT_HIDDEN) INPUT_HIDDEN.style.display = "block";
+  setPromptIdentity(adminAuth?.user.username ?? command.username);
+  renderEditorOverlay();
+}
+
+function previewDraftLines() {
+  if (!blogDraft) return;
+  writeLines([
+    "<br>",
+    `Title: ${blogDraft.title}`,
+    `Slug: ${blogDraft.slug}`,
+    `Status: ${blogDraft.status}`,
+    `Tags: ${blogDraft.tags.join(", ") || "none"}`,
+    "Content preview:",
+    ...blogDraft.lines.map((line, idx) => `${idx + 1}. ${line}`),
+    "<br>"
+  ]);
+}
+
+function handleEditorMeta(commandLine: string) {
+  if (!blogDraft) return;
+  const [cmd, ...rest] = commandLine.slice(1).split(" ");
+  const value = rest.join(" ").trim();
+  switch (cmd) {
+    case "title":
+      if (!isValidBlogTitle(normalizeBlogTitle(value))) {
+        setEditorStatus("Title must be 3-120 characters.");
+        return;
+      }
+      blogDraft.title = normalizeBlogTitle(value);
+      setEditorStatus("Title updated.");
+      return;
+    case "slug":
+      blogDraft.slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      setEditorStatus(`Slug updated: ${blogDraft.slug}`);
+      return;
+    case "excerpt":
+      blogDraft.excerpt = value;
+      setEditorStatus("Excerpt updated.");
+      return;
+    case "tags":
+      blogDraft.tags = value ? value.split(",").map((v) => v.trim()).filter(Boolean) : [];
+      setEditorStatus(`Tags: ${blogDraft.tags.join(", ") || "none"}`);
+      return;
+    case "status":
+      if (value === "draft" || value === "published") {
+        blogDraft.status = value;
+        setEditorStatus(`Status: ${value}`);
+      } else {
+        setEditorStatus("Use :status draft|published");
+      }
+      return;
+    case "edit": {
+      const lineNo = Number(value);
+      if (!Number.isFinite(lineNo) || lineNo < 1 || lineNo > blogDraft.lines.length) {
+        setEditorStatus(`Usage: :edit <line-number> (1-${blogDraft.lines.length})`);
+        return;
+      }
+      const idx = lineNo - 1;
+      editorEditingLineIndex = idx;
+      editorInputMode = "insert";
+      USERINPUT.value = blogDraft.lines[idx] ?? "";
+      editorLiveInput = USERINPUT.value;
+      editorCursorPos = USERINPUT.value.length;
+      setEditorStatus(`Editing line ${lineNo}. Update text and press Enter.`);
+      setTimeout(() => {
+        USERINPUT.focus();
+        USERINPUT.setSelectionRange(USERINPUT.value.length, USERINPUT.value.length);
+      }, 0);
+      return;
+    }
+    default:
+      setEditorStatus("Unknown editor command.");
+  }
+}
+
+function handleBlogEditorInput(rawInput: string) {
+  const input = rawInput.trim();
+  const commandInput = editorInputMode === "command" && input && !input.startsWith(":")
+    ? `:${input}`
+    : input;
+  if (!blogDraft) {
+    leaveBlogEditor();
+    return;
+  }
+  if (!input && editorInputMode === "insert") {
+    if (editorEditingLineIndex !== null) {
+      blogDraft.lines[editorEditingLineIndex] = "";
+      setEditorStatus(`Updated line ${editorEditingLineIndex + 1}.`);
+      editorEditingLineIndex = null;
+    } else {
+      blogDraft.lines.push("");
+    }
+    renderEditorOverlay();
+    return;
+  }
+  if (!input) return;
+
+  if (commandInput === ":q!") {
+    editorEditingLineIndex = null;
+    leaveBlogEditor();
+    writeLines(["Exited editor.", "<br>"]);
+    return;
+  }
+  if (commandInput === ":show") {
+    previewDraftLines();
+    renderEditorOverlay();
+    return;
+  }
+  if (commandInput === ":cover") {
+    setEditorStatus("Select local cover image...");
+    void pickLocalImageFile()
+      .then((file) => uploadAdminImageFile(file))
+      .then((img) => {
+        if (!blogDraft) return;
+        blogDraft.coverImage = img;
+        setEditorStatus(`Cover image uploaded: ${img.publicId}`);
+      })
+      .catch((error: unknown) => setEditorStatus(error instanceof Error ? error.message : "Cover upload failed."));
+    return;
+  }
+  if (commandInput.startsWith(":cover ")) {
+    const url = commandInput.slice(7).trim();
+    if (!isValidImageUrlCandidate(url)) {
+      setEditorStatus("Invalid image URL. Use a valid http(s) image link.");
+      return;
+    }
+    void uploadAdminImageFromUrl(url)
+      .then((img) => {
+        if (!blogDraft) return;
+        blogDraft.coverImage = img;
+        setEditorStatus(`Cover image set: ${img.publicId}`);
+      })
+      .catch((error: unknown) => setEditorStatus(error instanceof Error ? error.message : "Cover upload failed."));
+    return;
+  }
+  if (commandInput.startsWith(":img ")) {
+    const parts = commandInput.split(/\s+/);
+    const lineNo = Number(parts[1]);
+    const url = parts.slice(2).join(" ");
+    if (!Number.isFinite(lineNo) || lineNo < 1) {
+      setEditorStatus("Usage: :img <line-number> [image-url]");
+      return;
+    }
+    if (url && !isValidImageUrlCandidate(url)) {
+      setEditorStatus("Invalid image URL. Use a valid http(s) image link.");
+      return;
+    }
+    const uploadTask = url
+      ? uploadAdminImageFromUrl(url)
+      : pickLocalImageFile().then((file) => uploadAdminImageFile(file));
+    if (!url) setEditorStatus("Select local image...");
+    void uploadTask
+      .then((img) => {
+        if (!blogDraft) return;
+        blogDraft.images.push(img);
+        const insertAt = Math.min(Math.max(0, lineNo - 1), blogDraft.lines.length);
+        blogDraft.lines.splice(insertAt, 0, `![image](${img.url})`);
+        setEditorStatus(`Inserted image at line ${insertAt + 1}.`);
+        renderEditorOverlay();
+      })
+      .catch((error: unknown) => setEditorStatus(error instanceof Error ? error.message : "Image upload failed."));
+    return;
+  }
+  if (commandInput === ":wq") {
+    if (isEditorSaving) {
+      setEditorStatus("Save already in progress...");
+      return;
+    }
+    isEditorSaving = true;
+    editorEditingLineIndex = null;
+    const payload = {
+      title: blogDraft.title,
+      slug: blogDraft.slug,
+      excerpt: blogDraft.excerpt,
+      content: blogDraft.lines.join("\n"),
+      tags: blogDraft.tags,
+      status: blogDraft.status,
+      coverImage: blogDraft.coverImage,
+      images: blogDraft.images
+    };
+    if (!payload.title || !payload.slug || !payload.excerpt || !payload.content.trim()) {
+      isEditorSaving = false;
+      setEditorStatus("Missing required fields: :title :slug :excerpt and content.");
+      return;
+    }
+    const currentEditId = blogEditId;
+    void (currentEditId ? updateAdminBlog(currentEditId, payload) : createAdminBlog(payload))
+      .then((result) => {
+        leaveBlogEditor();
+        writeLines([`Saved blog: ${result.blog.title} [${result.blog._id}] (${result.blog.status})`, "<br>"]);
+      })
+      .catch((error: unknown) => {
+        isEditorSaving = false;
+        setEditorStatus(error instanceof Error ? error.message : "Save failed.");
+      });
+    return;
+  }
+  if (commandInput.startsWith(":")) {
+    handleEditorMeta(commandInput);
+    renderEditorOverlay();
+    return;
+  }
+
+  if (editorInputMode === "command") {
+    setEditorStatus("Press Esc to command mode, type :edit <line> / :wq / :q!, or text in insert mode.");
+    return;
+  }
+  if (editorEditingLineIndex !== null) {
+    blogDraft.lines[editorEditingLineIndex] = rawInput;
+    setEditorStatus(`Updated line ${editorEditingLineIndex + 1}.`);
+    editorEditingLineIndex = null;
+  } else {
+    blogDraft.lines.push(rawInput);
+  }
+  renderEditorOverlay();
+}
+
+function beginBlogSelection(action: "edit" | "view" | "publish" | "delete") {
+  const requestId = ++blogPickerRequestId;
+  void getAdminBlogs()
+    .then((data) => {
+      if (requestId !== blogPickerRequestId) return;
+      const items = data.blogs.slice(0, 20).map((b) => ({ _id: b._id, title: b.title, status: b.status, slug: b.slug }));
+      if (!items.length) {
+        writeLines(["No blogs available.", "<br>"]);
+        return;
+      }
+      blogPicker = { action, items, selectedIndex: 0 };
+      document.body.classList.add("picker-mode");
+      document.body.classList.remove("editor-mode");
+      if (INPUT_HIDDEN) INPUT_HIDDEN.style.display = "block";
+      renderBlogPicker();
+    })
+    .catch((error: unknown) => {
+      writeLines([error instanceof Error ? error.message : "Failed to load blogs.", "<br>"]);
+    });
+}
+
+function renderBlogPicker() {
+  if (!blogPicker) return;
+  const overlay = ensureEditorOverlay();
+  if (!overlay) return;
+  overlay.style.display = "block";
+  overlay.innerHTML = [
+    `<div class='editor-header'>Pick blog for ${blogPicker.action.toUpperCase()}</div>`,
+    "<div class='editor-body'>",
+    ...blogPicker.items.map((item, idx) => {
+      const marker = idx === blogPicker!.selectedIndex ? "❯" : " ";
+      return `<div class='editor-line ${idx === blogPicker!.selectedIndex ? "picker-selected" : ""}'><span class='editor-lineno'>${String(idx + 1).padStart(3, " ")}</span> ${marker} ${escapeHtml(item.title)} (${escapeHtml(item.status)}) [${escapeHtml(item.slug)}] <span class='command'>${escapeHtml(item._id)}</span></div>`;
+    }),
+    "</div>",
+    "<div class='editor-status'><span>-- PICKER --</span><span>↑/↓ move • Enter select • Esc cancel</span></div>"
+  ].join("");
+}
+
+function cancelBlogPicker() {
+  blogPickerRequestId++;
+  blogPicker = null;
+  document.body.classList.remove("picker-mode");
+  if (isBlogEditorMode) document.body.classList.add("editor-mode");
+  if (INPUT_HIDDEN) INPUT_HIDDEN.style.display = "block";
+  renderEditorOverlay();
+}
+
+function chooseBlogPickerSelection() {
+  if (!blogPicker) return;
+  const selected = blogPicker.items[blogPicker.selectedIndex];
+  const action = blogPicker.action;
+  cancelBlogPicker();
+  commandHandler(`admin blog-${action} ${selected._id}`, { bypassPendingBlogTitle: true });
 }
 
 function setPromptIdentity(value: string) {
@@ -890,22 +1664,27 @@ function readVirtualFile(rawPath: string): string | null {
 
 function openTarget(target: string) {
   if (target === "repo") {
+    void trackAnalyticsEvent("link_open", "open", { target });
     window.open(REPO_LINK, "_blank");
     return true;
   }
   if (target === "github") {
+    void trackAnalyticsEvent("link_open", "open", { target });
     window.open(`https://github.com/${SOCIAL.github}`, "_blank");
     return true;
   }
   if (target === "linkedin") {
+    void trackAnalyticsEvent("link_open", "open", { target });
     window.open(`https://www.linkedin.com/in/${SOCIAL.linkedin}`, "_blank");
     return true;
   }
   if (target === "email") {
+    void trackAnalyticsEvent("link_open", "open", { target });
     window.open(`mailto:${SOCIAL.email}?subject=Portfolio%20Inquiry`, "_blank");
     return true;
   }
   if (target === "resume") {
+    void trackAnalyticsEvent("link_open", "open", { target });
     downloadResume();
     return true;
   }
@@ -942,7 +1721,7 @@ function projectDeepDive(rawQuery: string): string[] {
   return lines;
 }
 
-function commandHandler(input: string) {
+function commandHandler(input: string, options?: { bypassPendingBlogTitle?: boolean }) {
   if (input.startsWith("rm -rf") && input.trim() !== "rm -rf") {
     if (isSudo && input === "rm -rf src" && !bareMode) {
       bareMode = true;
@@ -968,7 +1747,29 @@ function commandHandler(input: string) {
   const aliasOrCmd = ALIASES[parts[0]] ?? parts[0];
   const args = parts.slice(1);
   const normalizedInput = [aliasOrCmd, ...args].join(" ");
+
+  if (pendingBlogNewTitle && !options?.bypassPendingBlogTitle) {
+    const title = normalizeBlogTitle(input);
+    if (!isValidBlogTitle(title)) {
+      writeLines(["Title must be 3-120 characters.", "<br>"]);
+      return;
+    }
+    pendingBlogNewTitle = false;
+    startBlogEditor({
+      title,
+      slug: toSlug(title) || `post-${Date.now()}`,
+      excerpt: title,
+      tags: [],
+      status: "draft",
+      lines: [`# ${title}`, "", ""],
+      coverImage: null,
+      images: []
+    });
+    return;
+  }
+
   trackCommandUse(aliasOrCmd);
+  void trackAnalyticsEvent("command_run", aliasOrCmd, { input: normalizedInput });
   checkGuideProgress(normalizedInput);
 
   if (aliasOrCmd === "su") {
@@ -995,6 +1796,7 @@ function commandHandler(input: string) {
 
   if (aliasOrCmd === "admin") {
     const action = (args[0] ?? "").toLowerCase();
+    const rest = args.slice(1);
     if (!adminAuth) {
       writeLines(["Admin mode is locked. Use <span class='command'>'su &lt;username&gt;'</span>.", "<br>"]);
       return;
@@ -1019,12 +1821,106 @@ function commandHandler(input: string) {
       });
       return;
     }
+    if (action === "blog-new") {
+      const providedTitle = normalizeBlogTitle(rest.join(" "));
+      if (providedTitle) {
+        if (!isValidBlogTitle(providedTitle)) {
+          writeLines(["Title must be 3-120 characters.", "<br>"]);
+          return;
+        }
+        startBlogEditor({
+          title: providedTitle,
+          slug: toSlug(providedTitle) || `post-${Date.now()}`,
+          excerpt: providedTitle,
+          tags: [],
+          status: "draft",
+          lines: [`# ${providedTitle}`, "", ""],
+          coverImage: null,
+          images: []
+        });
+      } else {
+        pendingBlogNewTitle = true;
+        if (blogPicker) cancelBlogPicker();
+        writeLines([
+          "<br>",
+          "Enter blog title:",
+          "(after title, editor opens automatically)",
+          "<br>"
+        ]);
+      }
+      return;
+    }
+    if (action === "blog-edit") {
+      const id = rest[0];
+      if (!id) {
+        beginBlogSelection("edit");
+        return;
+      }
+      void getAdminBlogById(id)
+        .then((result) => {
+          const b = result.blog;
+          startBlogEditor({
+            title: b.title,
+            slug: b.slug,
+            excerpt: b.excerpt,
+            tags: b.tags ?? [],
+            status: b.status,
+            lines: (b.content ?? "").split("\n"),
+            coverImage: b.coverImage?.url && b.coverImage.publicId ? { url: b.coverImage.url, publicId: b.coverImage.publicId } : null,
+            images: b.images ?? []
+          }, b._id);
+        })
+        .catch((error: unknown) => writeLines([error instanceof Error ? error.message : "Failed to open editor.", "<br>"]));
+      return;
+    }
+    if (action === "blog-select") {
+      const pickAction = (rest[0] ?? "").toLowerCase();
+      if (pickAction === "edit" || pickAction === "view" || pickAction === "publish" || pickAction === "delete") {
+        beginBlogSelection(pickAction);
+      } else {
+        writeLines(["Usage: <span class='command'>admin blog-select <edit|view|publish|delete></span>", "<br>"]);
+      }
+      return;
+    }
+    if (action === "blog-delete") {
+      const id = rest[0];
+      if (!id) {
+        beginBlogSelection("delete");
+        return;
+      }
+      void deleteAdminBlog(id)
+        .then(() => writeLines([`Deleted blog: ${id}`, "<br>"]))
+        .catch((error: unknown) => writeLines([error instanceof Error ? error.message : "Failed to delete blog.", "<br>"]));
+      return;
+    }
+    if (action === "blog-publish") {
+      const id = rest[0];
+      if (!id) {
+        beginBlogSelection("publish");
+        return;
+      }
+      void publishAdminBlog(id)
+        .then((result) => writeLines([`Published: ${result.blog.title} (${result.blog.status})`, "<br>"]))
+        .catch((error: unknown) => writeLines([error instanceof Error ? error.message : "Failed to publish blog.", "<br>"]));
+      return;
+    }
+    if (action === "blog-view") {
+      const id = rest[0];
+      if (!id) {
+        beginBlogSelection("view");
+        return;
+      }
+      void getAdminBlogById(id)
+        .then((result) => writeLines(["<br>", `Title: ${result.blog.title}`, `Slug: ${result.blog.slug}`, `Status: ${result.blog.status}`, result.blog.excerpt, "<br>"]))
+        .catch((error: unknown) => writeLines([error instanceof Error ? error.message : "Failed to fetch blog.", "<br>"]));
+      return;
+    }
     if (action === "blogs" || action === "config" || action === "analytics") {
       void (async () => {
         try {
           if (action === "blogs") {
             const data = await getAdminBlogs();
-            const lines = data.blogs.slice(0, 12).map((item) => `- ${item.title} (${item.status}) [${item.slug}]`);
+            const lines = data.blogs.slice(0, 20).map((item) => `- ${item._id} | ${item.title} (${item.status}) [${item.slug}]`);
             writeLines(["<br>", `Admin blogs: ${data.pagination?.total ?? data.blogs.length}`, ...(lines.length ? lines : ["No blogs found."]), "<br>"]);
             return;
           }
@@ -1035,12 +1931,16 @@ function commandHandler(input: string) {
             return;
           }
           const data = await getAdminAnalyticsSummary();
+          const eventMax = Math.max(1, ...(data.eventTypes ?? []).map((row) => row.count));
+          const commandMax = Math.max(1, ...(data.topCommands ?? []).map((row) => row.count));
           writeLines([
             "<br>",
             `Total events: ${data.totalEvents}`,
             `Unique sessions: ${data.uniqueSessions}`,
-            `Top event types: ${(data.eventTypes ?? []).slice(0, 5).map((row) => `${row._id}:${row.count}`).join(", ") || "none"}`,
-            `Top commands: ${(data.topCommands ?? []).slice(0, 5).map((row) => `${row._id}:${row.count}`).join(", ") || "none"}`,
+            "Event types graph:",
+            ...((data.eventTypes ?? []).slice(0, 8).map((row) => `${row._id.padEnd(16)} ${renderBar(row.count, eventMax)} ${row.count}`)),
+            "Top commands graph:",
+            ...((data.topCommands ?? []).slice(0, 8).map((row) => `${String(row._id ?? "unknown").padEnd(16)} ${renderBar(row.count, commandMax)} ${row.count}`)),
             "<br>"
           ]);
         } catch (error: unknown) {
@@ -1050,7 +1950,55 @@ function commandHandler(input: string) {
       })();
       return;
     }
-    writeLines(["Unknown admin subcommand. Run <span class='command'>'admin'</span>.", "<br>"]);
+    writeLines([
+      "Unknown admin subcommand.",
+      "Try: <span class='command'>admin blogs</span>, <span class='command'>admin blog-new</span>, <span class='command'>admin blog-edit &lt;id&gt;</span>, <span class='command'>admin blog-publish &lt;id&gt;</span>",
+      "<br>"
+    ]);
+    return;
+  }
+
+  if (aliasOrCmd === "blogs") {
+    const mode = (args[0] ?? "").toLowerCase();
+    const query = args.slice(1).join(" ").trim();
+    void (async () => {
+      try {
+        if (mode === "tag") {
+          const data = await getPublicBlogs(undefined, query);
+          writeLines(["<br>", `Blogs by tag '${query}': ${data.pagination?.total ?? data.blogs.length}`, ...data.blogs.map((b, i) => `${i + 1}. ${b.title} [${b.slug}]`), "<br>"]);
+          return;
+        }
+        const search = mode === "search" ? query : args.join(" ").trim();
+        const data = await getPublicBlogs(search || undefined);
+        writeLines(["<br>", `Published blogs: ${data.pagination?.total ?? data.blogs.length}`, ...data.blogs.map((b, i) => `${i + 1}. ${b.title} - ${b.excerpt}`), "<br>"]);
+      } catch (error: unknown) {
+        writeLines([error instanceof Error ? error.message : "Failed to fetch blogs.", "<br>"]);
+      }
+    })();
+    return;
+  }
+
+  if (aliasOrCmd === "blog") {
+    const mode = (args[0] ?? "").toLowerCase();
+    if (mode === "search") {
+      const query = args.slice(1).join(" ").trim();
+      void getPublicBlogs(query || undefined)
+        .then((data) => writeLines(["<br>", `Search results: ${data.pagination?.total ?? data.blogs.length}`, ...data.blogs.map((b) => `- ${b.title} [${b.slug}]`), "<br>"]))
+        .catch((error: unknown) => writeLines([error instanceof Error ? error.message : "Search failed.", "<br>"]));
+      return;
+    }
+    if (mode === "view") {
+      const slug = args[1];
+      if (!slug) {
+        writeLines(["Usage: <span class='command'>blog view <slug></span>", "<br>"]);
+        return;
+      }
+      void getPublicBlogBySlug(slug)
+        .then((data) => writeLines(["<br>", data.blog.title, data.blog.excerpt, ...(data.blog.content.split("\n").slice(0, 40)), "<br>"]))
+        .catch((error: unknown) => writeLines([error instanceof Error ? error.message : "Failed to fetch blog.", "<br>"]));
+      return;
+    }
+    writeLines(["Usage: <span class='command'>blog view <slug></span> | <span class='command'>blog search <query></span>", "<br>"]);
     return;
   }
 
@@ -1110,13 +2058,16 @@ function writeLines(message: string[]) {
 
 function displayText(item: string, idx: number) {
   const isHelpLayout = item.includes("help-layout");
-  const delay = SESSION.reducedMotion || isHelpLayout ? 0 : 35 * idx;
+  const isHelpMeta = item.includes("Help usage:") || item.includes("Types:") || item.includes("Press <span class='keys'>[");
+  const base = isHelpLayout || isHelpMeta ? 55 : 35;
+  const delay = SESSION.reducedMotion ? 0 : base * idx;
   setTimeout(() => {
     if (!mutWriteLines) return;
+    if (!mutWriteLines.parentNode) return;
     const p = document.createElement("p");
     if (isHelpLayout) p.classList.add("no-line-anim");
     p.innerHTML = item;
-    mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
+    mutWriteLines.parentNode.insertBefore(p, mutWriteLines);
     scrollToBottom();
   }, delay);
 }
@@ -1214,13 +2165,33 @@ function registerServiceWorker() {
 }
 
 function initEventListeners() {
+  if (listenersInitialized) return;
+  listenersInitialized = true;
   if (HOST) HOST.innerText = command.hostname;
   if (USER) USER.innerText = command.username;
   if (PRE_HOST) PRE_HOST.innerText = command.hostname;
   if (PRE_USER) PRE_USER.innerText = command.username;
-  setPromptIdentity(command.username);
+  setPromptIdentity(adminAuth?.user.username ?? command.username);
+  SESSION.adminMode = Boolean(adminAuth);
+  persistSession();
 
   window.addEventListener("load", () => {
+    if (adminAuth) {
+      void refreshAdminSession()
+        .then(() => {
+          SESSION.adminMode = true;
+          persistSession();
+          setPromptIdentity(adminAuth?.user.username ?? command.username);
+        })
+        .catch(() => {
+          adminAuth = null;
+          persistAdminAuth(null);
+          SESSION.adminMode = false;
+          persistSession();
+          setPromptIdentity(command.username);
+        });
+    }
+    void trackAnalyticsEvent("page_view", "boot", { userAgent: navigator.userAgent });
     applyTheme(SESSION.theme);
     applyMotionPreference();
     const startup = command.startup;
@@ -1273,6 +2244,12 @@ function initEventListeners() {
   });
 
   window.addEventListener("keydown", (e) => {
+    if (blogPicker || isBlogEditorMode) {
+      if (document.activeElement !== USERINPUT && document.activeElement !== PASSWORD_INPUT) {
+        USERINPUT.focus();
+      }
+      return;
+    }
     if (e.ctrlKey && (e.key === "r" || e.key === "R")) {
       e.preventDefault();
       const needle = USERINPUT.value.trim().toLowerCase();

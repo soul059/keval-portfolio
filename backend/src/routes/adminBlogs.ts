@@ -69,6 +69,20 @@ router.get(
   })
 );
 
+router.get(
+  "/:id",
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const blog = await BlogModel.findById(req.params.id).lean();
+    if (!blog) {
+      res.status(404).json({ message: "Blog not found." });
+      return;
+    }
+    res.json({ blog });
+  })
+);
+
 router.post(
   "/",
   requireAuth,
@@ -160,6 +174,35 @@ router.delete(
     });
 
     res.status(204).send();
+  })
+);
+
+router.post(
+  "/:id/publish",
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const actorId = req.user!.userId;
+    const existing = await BlogModel.findById(req.params.id);
+    if (!existing) {
+      res.status(404).json({ message: "Blog not found." });
+      return;
+    }
+    const before = existing.toObject();
+    existing.status = "published";
+    existing.publishedAt = existing.publishedAt ?? new Date();
+    await existing.save();
+
+    await writeAuditLog({
+      actorId,
+      action: "blog.publish",
+      entity: "Blog",
+      entityId: String(existing._id),
+      before,
+      after: existing.toObject()
+    });
+
+    res.json({ blog: existing });
   })
 );
 

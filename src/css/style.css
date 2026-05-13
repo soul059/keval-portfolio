@@ -173,6 +173,129 @@ input.command-invalid {
   color: var(--prompt-default);
 }
 
+body.editor-mode #terminal {
+  margin-left: 0;
+  padding: 0;
+}
+
+body.editor-mode #terminal > div,
+body.editor-mode #terminal > p,
+body.editor-mode #terminal > a:not(#write-lines) {
+  display: none !important;
+}
+
+body.editor-mode #terminal > #editor-overlay {
+  display: block !important;
+}
+
+body.editor-mode #input-line {
+  position: absolute;
+  left: -10000px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+body.editor-mode #bar-1 {
+  background: linear-gradient(90deg, var(--border), var(--banner-color));
+}
+
+body.editor-mode #bar-1::after {
+  content: "  [EDITOR MODE]";
+}
+
+body.picker-mode #terminal {
+  margin-left: 0;
+  padding: 0;
+}
+
+body.picker-mode #terminal > div,
+body.picker-mode #terminal > p,
+body.picker-mode #terminal > a:not(#write-lines) {
+  display: none !important;
+}
+
+body.picker-mode #terminal > #editor-overlay {
+  display: block !important;
+}
+
+body.picker-mode #input-line {
+  position: absolute;
+  left: -10000px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+#editor-overlay {
+  border: 1px solid var(--border);
+  min-height: 62vh;
+  margin: 0 10px 8px;
+  padding: 0;
+  font-family: "VT323", monospace;
+  font-size: 24px;
+}
+
+.editor-header {
+  padding: 4px 10px;
+  color: var(--bg);
+  background: var(--border);
+}
+
+.editor-body {
+  padding: 8px 10px 34px;
+  min-height: 48vh;
+  line-height: 1.35;
+}
+
+.editor-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.editor-line-editing {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.editor-lineno {
+  color: var(--prompt-default);
+  opacity: 0.7;
+}
+
+.editor-status {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 10px;
+  background: #1e2a3c;
+  color: #d6e7ff;
+}
+
+.editor-status span:last-child {
+  opacity: 0.9;
+}
+
+.editor-cmdline {
+  margin-top: 8px;
+  min-height: 1.2em;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 4px;
+  color: var(--text);
+}
+
+.editor-caret {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.picker-selected {
+  background: rgba(88, 166, 255, 0.16);
+}
+
 /* Placeholder styling */
 input::placeholder {
   color: var(--prompt-default);
@@ -343,7 +466,34 @@ body.reduced-motion *::after {
 }
 
 #terminal p.no-line-anim {
-  animation: none;
+  animation: helpGridIn 0.55s ease;
+}
+
+#terminal p.no-line-anim .help-card {
+  opacity: 0;
+  transform: translateY(6px);
+  animation: helpCardIn 0.4s ease forwards;
+}
+
+#terminal p.no-line-anim .help-card:nth-child(1) { animation-delay: 0.04s; }
+#terminal p.no-line-anim .help-card:nth-child(2) { animation-delay: 0.1s; }
+#terminal p.no-line-anim .help-card:nth-child(3) { animation-delay: 0.16s; }
+#terminal p.no-line-anim .help-card:nth-child(4) { animation-delay: 0.22s; }
+
+@keyframes helpGridIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes helpCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes fadeIn {

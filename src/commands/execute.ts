@@ -1,4 +1,4 @@
-import { HELP, createHelpByType } from "./help";
+import { createHelpAll, createHelpByType } from "./help";
 import { ABOUT } from "./about";
 import { DEFAULT } from "./default";
 import { PROJECTS } from "./projects";
@@ -17,6 +17,7 @@ interface SessionLike {
   sound: boolean;
   visited: string[];
   unlockedSecret: boolean;
+  adminMode?: boolean;
 }
 
 interface SocialLike {
@@ -82,9 +83,9 @@ export function executeCommand(ctx: ExecuteCommandContext) {
       break;
     case "help":
       if (args[0]) {
-        ctx.writeLines(createHelpByType(args[0]));
+        ctx.writeLines(createHelpByType(args[0], Boolean(ctx.session.adminMode)));
       } else {
-        ctx.writeLines(HELP);
+        ctx.writeLines(createHelpAll(Boolean(ctx.session.adminMode)));
       }
       ctx.registerVisit("help");
       break;

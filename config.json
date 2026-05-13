@@ -1,13 +1,13 @@
 {
   "ascii": [
 "    ▄▄",
-"    ▀███                                  ▀███",
-"      ██                                    ██",
-"      ██  ▄██▀  ▄▄█▀██ ▀██▀   ▀██▀ ▄█▀██▄    ██",
-"      ██ ▄█    ▄█▀   ██  ██   ▄█  ██   ██    ██",
-"      ██▄██    ██▀▀▀▀▀▀   ██ ▄█    ▄█████    ██",
-"      ██ ▀██▄  ██▄    ▄    ███    ██   ██    ██",
-"    ▄████▄ ██▄▄ ▀█████▀     █     ▀████▀██▄▄████▄"
+"    ▀███                                    ▀███",
+"      ██                                      ██",
+"      ██  ▄██▀  ▄▄█▀██ ▀██▀   ▀██▀ ▄█▀██▄     ██",
+"      ██ ▄█    ▄█▀   ██  ██   ▄█  ██   ██     ██",
+"      ██▄██    ██▀▀▀▀▀▀   ██ ▄█    ▄█████     ██",
+"      ██ ▀██▄  ██▄    ▄    ███    ██   ██     ██",
+"    ▄████▄ ██▄▄ ▀█████▀     █     ▀████▀██ ▄▄████▄"
   ],
   "title": "WebShell",
   "username": "visitor",
@@ -193,6 +193,14 @@
       "project <name|index>",
       "Show deep-dive view for a specific project."
     ],
+    "blogs": [
+      "blogs [search <query>|tag <tag>]",
+      "List or search published blogs."
+    ],
+    "blog": [
+      "blog view <slug> | blog search <query>",
+      "View one blog or search blog content."
+    ],
     "open": [
       "open <repo|github|linkedin|email|resume|project ...>",
       "Open supported targets directly."
@@ -260,6 +268,12 @@
     "admin": [
       "admin [whoami|logout|blogs|config|analytics]",
       "Admin-only command namespace after successful su login."
+    ],
+    "admin-blog": [
+      "admin blog-new [title] | admin blog-edit [id] | admin blog-view [id] | admin blog-publish [id] | admin blog-delete [id] | admin blog-select <edit|view|publish|delete>",
+      "blog-new prompts title if missing, then opens TUI editor; ID can be omitted to open selector.",
+      "Editor line edit: :edit <line-number> then modify and press Enter.",
+      "Editor image commands: :img <line> (local file picker), :img <line> <url>, :cover (local file picker), :cover <url>."
     ],
     "clear": [
       "clear",

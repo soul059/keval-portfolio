@@ -23,6 +23,8 @@ const helpObj = {
     ["'ls [path]'", "List virtual files/directories."],
     ["'cat <file>'", "Read virtual files (resume.md, skills.md)."],
     ["'open <target>'", "Open repo/github/linkedin/email/resume."],
+    ["'blogs [search <query>|tag <tag>]'", "List/search published blogs."],
+    ["'blog view <slug>'", "Open a published blog by slug."],
     ["'man <topic>'", "Read command manual pages."],
     ["'keys'", "Show keyboard shortcuts."],
     ["'stats'", "Show local command usage stats."],
@@ -38,6 +40,10 @@ const helpObj = {
     ["'prefs [export|reset]'", "Manage local storage preferences."],
     ["'su <admin-username>'", "Authenticate as seeded admin."],
     ["'admin [whoami|logout|blogs|config|analytics]'", "Run admin-only commands."],
+    ["'admin blog-new [title]'", "Opens editor. Command mode: :edit <line>, :img <line> (file), :img <line> <url>, :cover."],
+    ["'admin blog-edit [id]'", "Edit by ID, or pick from list if omitted."],
+    ["'admin blog-view|blog-publish|blog-delete [id]'", "Manage by ID, or pick from selector list."],
+    ["'admin blog-select <edit|view|publish|delete>'", "Open linux-style selector list first."],
     ["'clear'", "Clear the terminal."],
     ["'sudo'", "Unlock hidden commands."],
     ["'ls'", "List directory contents."]
@@ -55,19 +61,20 @@ const sectionTitles: Record<HelpSection, string> = {
 };
 export const HELP_TYPES = ["discover", "navigate", "terminalos", "system"] as const;
 
-const createCommandSection = (title: string, commands: string[][]): string => {
-  const rows = commands
+const createCommandSection = (title: string, commands: string[][], isAdmin: boolean): string => {
+  const visibleCommands = commands.filter(([cmd]) => isAdmin || !cmd.includes("'admin "));
+  const rows = visibleCommands
     .map(([cmd, desc]) => `<span class='command help-cmd'>${cmd}</span><span class='help-desc'>${desc}</span>`)
     .join("");
   return `<span class='help-card'><span class='keys help-title'>${title}</span><span class='help-grid'>${rows}</span></span>`;
 }
 
-const createHelpAll = () : string[] => {
+export const createHelpAll = (isAdmin = false) : string[] => {
   const help : string[] = []
   help.push("<br>")
   help.push("Quick start: <span class='cmd-chip' data-command='start'>start</span> <span class='cmd-chip' data-command='about'>about</span> <span class='cmd-chip' data-command='projects'>projects</span> <span class='cmd-chip' data-command='hire'>hire</span>");
   help.push("<br>");
-  help.push(`<span class='help-layout'>${sectionOrder.map((section) => createCommandSection(sectionTitles[section], helpObj[section])).join("")}</span>`);
+  help.push(`<span class='help-layout'>${sectionOrder.map((section) => createCommandSection(sectionTitles[section], helpObj[section], isAdmin)).join("")}</span>`);
 
   help.push("<br>");
   help.push("Help usage:");
@@ -82,9 +89,9 @@ const createHelpAll = () : string[] => {
   return help
 }
 
-export const HELP = createHelpAll();
+export const HELP = createHelpAll(false);
 
-export const createHelpByType = (type: string): string[] => {
+export const createHelpByType = (type: string, isAdmin = false): string[] => {
   const normalized = type.toLowerCase();
   const map: Record<string, HelpSection> = {
     discover: "discover",
@@ -104,7 +111,7 @@ export const createHelpByType = (type: string): string[] => {
 
   const help: string[] = [];
   help.push("<br>");
-  help.push(`<span class='help-layout'><span class='help-layout-single'>${createCommandSection(sectionTitles[section], helpObj[section])}</span></span>`);
+  help.push(`<span class='help-layout'><span class='help-layout-single'>${createCommandSection(sectionTitles[section], helpObj[section], isAdmin)}</span></span>`);
   help.push("<br>");
   return help;
 }

@@ -21,7 +21,6 @@ const createBanner = () : string[] => {
   banner.push("Welcome to WebShell v1.0.0");
   banner.push("Type <span class='command'>'help'</span> for a list of all available commands.");
   banner.push("Quick demo: <span class='command'>'demo recruiter'</span> or <span class='command'>'demo client'</span>.");
-  banner.push("Start with <span class='command'>'help'</span>.");
   banner.push("<br>");
   return banner;
 }
