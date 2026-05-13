@@ -1,4 +1,4 @@
-import command from '../config.json' assert { type: 'json' };
+import command from '../config.json';
 import { HELP_TYPES } from "./commands/help";
 import { BANNER } from "./commands/banner";
 import { executeCommand } from "./commands/execute";
@@ -101,6 +101,10 @@ function loadAdminAuth(): AdminAuthState | null {
   try {
     const parsed = JSON.parse(raw) as AdminAuthState;
     if (!parsed?.accessToken || !parsed?.refreshToken || !parsed?.expiresAt || !parsed?.user?.username) return null;
+    if (parsed.expiresAt <= Date.now()) {
+      localStorage.removeItem(ADMIN_AUTH_KEY);
+      return null;
+    }
     return parsed;
   } catch {
     localStorage.removeItem(ADMIN_AUTH_KEY);
@@ -365,7 +369,7 @@ function renderEditorOverlay() {
     `  "${blogDraft.slug}.md" ${blogEditId ? "[EDIT]" : "[NEW]"}  ${blogDraft.status.toUpperCase()}`,
     "</div>",
     "<div class='editor-body'>",
-    ...lines.map((line, idx) => `<div class='editor-line ${editorEditingLineIndex === idx ? "editor-line-editing" : ""}'><span class='editor-lineno'>${String(idx + 1).padStart(3, " ")}</span> ${line || "&nbsp;"}</div>`),
+    ...lines.map((line, idx) => `<div class='editor-line ${editorEditingLineIndex === idx ? "editor-line-editing" : ""}'><span class='editor-lineno'>${String(idx + 1).padStart(3, " ")}</span> ${line ? renderMarkdownLine(line) : "&nbsp;"}</div>`),
     `<div class='editor-cmdline'>${cmdPrefix}${before}<span class='editor-caret'>${caretChar}</span>${after}</div>`,
     "</div>",
     `<div class='editor-status'><span>${modeLabel}</span><span>${status}</span></div>`
@@ -415,6 +419,85 @@ function escapeHtmlAttr(value: string) {
   return escapeHtml(value)
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function renderCoverImage(url: string | null | undefined, altText: string) {
+  if (!url) return [];
+  const safeUrl = escapeHtmlAttr(url);
+  const safeAlt = escapeHtmlAttr(altText);
+  return [
+    "<div class='blog-cover'>",
+    `  <a href='${safeUrl}' target='_blank' rel='noreferrer'>`,
+    `    <img class='blog-cover-image' src='${safeUrl}' alt='${safeAlt}' loading='lazy' />`,
+    "  </a>",
+    "</div>"
+  ];
+}
+
+function parseMarkdownImageLine(line: string) {
+  const match = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+  if (!match) return null;
+  return { alt: match[1], url: match[2] };
+}
+
+function renderMarkdownLine(line: string) {
+  const parsed = parseMarkdownImageLine(line.trim());
+  if (!parsed) return escapeHtml(line);
+  const safeUrl = escapeHtmlAttr(parsed.url);
+  const safeAlt = escapeHtmlAttr(parsed.alt || "embedded image");
+  return [
+    "<div class='blog-inline-image'>",
+    `  <a href='${safeUrl}' target='_blank' rel='noreferrer'>`,
+    `    <img src='${safeUrl}' alt='${safeAlt}' loading='lazy' />`,
+    "  </a>",
+    "</div>"
+  ].join("");
+}
+
+function hasEmbeddedImage(content: string) {
+  return content.split("\n").some((line) => Boolean(parseMarkdownImageLine(line.trim())));
+}
+
+function insertCoverImageLine(img: { url: string; publicId: string }) {
+  if (!blogDraft) return;
+  const previousCoverUrl = blogDraft.coverImage?.url;
+  if (previousCoverUrl) {
+    const previousCoverIndex = blogDraft.lines.findIndex((line) => parseMarkdownImageLine(line.trim())?.url === previousCoverUrl);
+    if (previousCoverIndex >= 0) {
+      blogDraft.lines.splice(previousCoverIndex, 1);
+      if (blogDraft.lines[previousCoverIndex] === "") {
+        blogDraft.lines.splice(previousCoverIndex, 1);
+      }
+    }
+  }
+  blogDraft.coverImage = img;
+  const insertAt = Math.min(1, blogDraft.lines.length);
+  blogDraft.lines.splice(insertAt, 0, `![cover](${img.url})`);
+  blogDraft.lines.splice(insertAt + 1, 0, "");
+  editorEditingLineIndex = insertAt + 1;
+  editorInputMode = "insert";
+  USERINPUT.value = "";
+  editorLiveInput = "";
+  editorCursorPos = 0;
+  renderEditorOverlay();
+  setEditorStatus("Cover image inserted at the top. Continue writing on the next line.");
+  setTimeout(() => USERINPUT.focus(), 0);
+}
+
+function insertInlineImageLine(img: { url: string; publicId: string }, insertAt: number) {
+  if (!blogDraft) return;
+  blogDraft.images.push(img);
+  const normalizedInsertAt = Math.min(Math.max(0, insertAt), blogDraft.lines.length);
+  blogDraft.lines.splice(normalizedInsertAt, 0, `![image](${img.url})`);
+  blogDraft.lines.splice(normalizedInsertAt + 1, 0, "");
+  editorEditingLineIndex = normalizedInsertAt + 1;
+  editorInputMode = "insert";
+  USERINPUT.value = "";
+  editorLiveInput = "";
+  editorCursorPos = 0;
+  renderEditorOverlay();
+  setEditorStatus(`Inserted image at line ${normalizedInsertAt + 1}. Continue writing on the next line.`);
+  setTimeout(() => USERINPUT.focus(), 0);
 }
 
 function playKeySound() {
@@ -535,7 +618,7 @@ function enterKey() {
     updateInputState();
     return;
   }
-  const output = bareMode ? userInput : `<span class='output'>${userInput}</span>`;
+  const output = bareMode ? escapeHtml(userInput) : `<span class='output'>${escapeHtml(userInput)}</span>`;
 
   if (userInput.length > 0) {
     HISTORY.push(userInput);
@@ -971,6 +1054,7 @@ async function getPublicBlogBySlug(slug: string) {
       slug: string;
       excerpt: string;
       content: string;
+      coverImage?: { url?: string; publicId?: string } | null;
       tags?: string[];
       publishedAt?: string;
     };
@@ -1216,9 +1300,10 @@ function previewDraftLines() {
     `Title: ${blogDraft.title}`,
     `Slug: ${blogDraft.slug}`,
     `Status: ${blogDraft.status}`,
+    `Cover: ${blogDraft.coverImage?.url ?? "none"}`,
     `Tags: ${blogDraft.tags.join(", ") || "none"}`,
     "Content preview:",
-    ...blogDraft.lines.map((line, idx) => `${idx + 1}. ${line}`),
+    ...blogDraft.lines.map((line, idx) => `${idx + 1}. ${renderMarkdownLine(line)}`),
     "<br>"
   ]);
 }
@@ -1256,6 +1341,26 @@ function handleEditorMeta(commandLine: string) {
         setEditorStatus("Use :status draft|published");
       }
       return;
+    case "rm":
+    case "del":
+    case "delete": {
+      const lineNo = Number(value);
+      if (!Number.isFinite(lineNo) || lineNo < 1 || lineNo > blogDraft.lines.length) {
+        setEditorStatus(`Usage: :rm <line-number> (1-${blogDraft.lines.length})`);
+        return;
+      }
+      const idx = lineNo - 1;
+      const removedLine = blogDraft.lines[idx] ?? "";
+      const parsed = parseMarkdownImageLine(removedLine.trim());
+      if (parsed && blogDraft.coverImage?.url === parsed.url) {
+        blogDraft.coverImage = null;
+      }
+      blogDraft.lines.splice(idx, 1);
+      editorEditingLineIndex = null;
+      setEditorStatus(`Removed line ${lineNo}.`);
+      renderEditorOverlay();
+      return;
+    }
     case "edit": {
       const lineNo = Number(value);
       if (!Number.isFinite(lineNo) || lineNo < 1 || lineNo > blogDraft.lines.length) {
@@ -1318,24 +1423,43 @@ function handleBlogEditorInput(rawInput: string) {
     void pickLocalImageFile()
       .then((file) => uploadAdminImageFile(file))
       .then((img) => {
-        if (!blogDraft) return;
-        blogDraft.coverImage = img;
-        setEditorStatus(`Cover image uploaded: ${img.publicId}`);
+        insertCoverImageLine(img);
       })
       .catch((error: unknown) => setEditorStatus(error instanceof Error ? error.message : "Cover upload failed."));
     return;
   }
+  if (commandInput === ":img") {
+    const insertAt = editorEditingLineIndex !== null ? editorEditingLineIndex + 1 : blogDraft.lines.length;
+    setEditorStatus("Select local image...");
+    void pickLocalImageFile()
+      .then((file) => uploadAdminImageFile(file))
+      .then((img) => insertInlineImageLine(img, insertAt))
+      .catch((error: unknown) => setEditorStatus(error instanceof Error ? error.message : "Image upload failed."));
+    return;
+  }
   if (commandInput.startsWith(":cover ")) {
     const url = commandInput.slice(7).trim();
+    if (url === "clear" || url === "remove" || url === "delete") {
+      if (!blogDraft) return;
+      const coverUrl = blogDraft.coverImage?.url;
+      if (coverUrl) {
+        const coverLineIndex = blogDraft.lines.findIndex((line) => parseMarkdownImageLine(line.trim())?.url === coverUrl);
+        if (coverLineIndex >= 0) {
+          blogDraft.lines.splice(coverLineIndex, 1);
+        }
+      }
+      blogDraft.coverImage = null;
+      setEditorStatus("Cover image removed.");
+      renderEditorOverlay();
+      return;
+    }
     if (!isValidImageUrlCandidate(url)) {
       setEditorStatus("Invalid image URL. Use a valid http(s) image link.");
       return;
     }
     void uploadAdminImageFromUrl(url)
       .then((img) => {
-        if (!blogDraft) return;
-        blogDraft.coverImage = img;
-        setEditorStatus(`Cover image set: ${img.publicId}`);
+        insertCoverImageLine(img);
       })
       .catch((error: unknown) => setEditorStatus(error instanceof Error ? error.message : "Cover upload failed."));
     return;
@@ -1358,12 +1482,7 @@ function handleBlogEditorInput(rawInput: string) {
     if (!url) setEditorStatus("Select local image...");
     void uploadTask
       .then((img) => {
-        if (!blogDraft) return;
-        blogDraft.images.push(img);
-        const insertAt = Math.min(Math.max(0, lineNo - 1), blogDraft.lines.length);
-        blogDraft.lines.splice(insertAt, 0, `![image](${img.url})`);
-        setEditorStatus(`Inserted image at line ${insertAt + 1}.`);
-        renderEditorOverlay();
+        insertInlineImageLine(img, lineNo - 1);
       })
       .catch((error: unknown) => setEditorStatus(error instanceof Error ? error.message : "Image upload failed."));
     return;
@@ -1394,7 +1513,7 @@ function handleBlogEditorInput(rawInput: string) {
     void (currentEditId ? updateAdminBlog(currentEditId, payload) : createAdminBlog(payload))
       .then((result) => {
         leaveBlogEditor();
-        writeLines([`Saved blog: ${result.blog.title} [${result.blog._id}] (${result.blog.status})`, "<br>"]);
+        writeLines([`Saved blog: ${result.blog.title} [${result.blog._id}] (${result.blog.status}) | cover: ${payload.coverImage?.url ?? "none"}`, "<br>"]);
       })
       .catch((error: unknown) => {
         isEditorSaving = false;
@@ -1439,6 +1558,7 @@ function beginBlogSelection(action: "edit" | "view" | "publish" | "delete") {
       renderBlogPicker();
     })
     .catch((error: unknown) => {
+      if (requestId !== blogPickerRequestId) return;
       writeLines([error instanceof Error ? error.message : "Failed to load blogs.", "<br>"]);
     });
 }
@@ -1761,7 +1881,7 @@ function commandHandler(input: string, options?: { bypassPendingBlogTitle?: bool
       excerpt: title,
       tags: [],
       status: "draft",
-      lines: [`# ${title}`, "", ""],
+      lines: [`# ${title}`],
       coverImage: null,
       images: []
     });
@@ -1834,7 +1954,7 @@ function commandHandler(input: string, options?: { bypassPendingBlogTitle?: bool
           excerpt: providedTitle,
           tags: [],
           status: "draft",
-          lines: [`# ${providedTitle}`, "", ""],
+          lines: [`# ${providedTitle}`],
           coverImage: null,
           images: []
         });
@@ -1911,7 +2031,16 @@ function commandHandler(input: string, options?: { bypassPendingBlogTitle?: bool
         return;
       }
       void getAdminBlogById(id)
-        .then((result) => writeLines(["<br>", `Title: ${result.blog.title}`, `Slug: ${result.blog.slug}`, `Status: ${result.blog.status}`, result.blog.excerpt, "<br>"]))
+        .then((result) => writeLines([
+          "<br>",
+          `Title: ${result.blog.title}`,
+          `Slug: ${result.blog.slug}`,
+          `Status: ${result.blog.status}`,
+          ...(!hasEmbeddedImage(result.blog.content ?? "") ? renderCoverImage(result.blog.coverImage?.url, result.blog.title) : []),
+          result.blog.excerpt,
+          ...((result.blog.content ?? "").split("\n").slice(0, 40).map((line) => renderMarkdownLine(line))),
+          "<br>"
+        ]))
         .catch((error: unknown) => writeLines([error instanceof Error ? error.message : "Failed to fetch blog.", "<br>"]));
       return;
     }
@@ -1994,7 +2123,14 @@ function commandHandler(input: string, options?: { bypassPendingBlogTitle?: bool
         return;
       }
       void getPublicBlogBySlug(slug)
-        .then((data) => writeLines(["<br>", data.blog.title, data.blog.excerpt, ...(data.blog.content.split("\n").slice(0, 40)), "<br>"]))
+        .then((data) => writeLines([
+          "<br>",
+          data.blog.title,
+          ...(!hasEmbeddedImage(data.blog.content) ? renderCoverImage(data.blog.coverImage?.url, data.blog.title) : []),
+          data.blog.excerpt,
+          ...(data.blog.content.split("\n").slice(0, 40).map((line) => renderMarkdownLine(line))),
+          "<br>"
+        ]))
         .catch((error: unknown) => writeLines([error instanceof Error ? error.message : "Failed to fetch blog.", "<br>"]));
       return;
     }
@@ -2064,10 +2200,10 @@ function displayText(item: string, idx: number) {
   setTimeout(() => {
     if (!mutWriteLines) return;
     if (!mutWriteLines.parentNode) return;
-    const p = document.createElement("p");
-    if (isHelpLayout) p.classList.add("no-line-anim");
-    p.innerHTML = item;
-    mutWriteLines.parentNode.insertBefore(p, mutWriteLines);
+    const element = document.createElement(isHelpLayout ? "div" : "p");
+    if (isHelpLayout) element.classList.add("no-line-anim");
+    element.innerHTML = item;
+    mutWriteLines.parentNode.insertBefore(element, mutWriteLines);
     scrollToBottom();
   }, delay);
 }
@@ -2151,6 +2287,9 @@ function easterEggStyles() {
 }
 
 function registerServiceWorker() {
+  if (swRegistered || (window as Window & { __webshellSwRegistered?: boolean }).__webshellSwRegistered) return;
+  swRegistered = true;
+  (window as Window & { __webshellSwRegistered?: boolean }).__webshellSwRegistered = true;
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     navigator.serviceWorker.getRegistrations()
@@ -2165,8 +2304,9 @@ function registerServiceWorker() {
 }
 
 function initEventListeners() {
-  if (listenersInitialized) return;
+  if (listenersInitialized || (window as Window & { __webshellListenersInit?: boolean }).__webshellListenersInit) return;
   listenersInitialized = true;
+  (window as Window & { __webshellListenersInit?: boolean }).__webshellListenersInit = true;
   if (HOST) HOST.innerText = command.hostname;
   if (USER) USER.innerText = command.username;
   if (PRE_HOST) PRE_HOST.innerText = command.hostname;

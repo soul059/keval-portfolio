@@ -429,17 +429,67 @@ a:hover {
 }
 
 .help-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.help-row {
   display: grid;
   grid-template-columns: minmax(170px, 220px) 1fr;
   gap: 4px 12px;
+  align-items: start;
+}
+
+.help-row > * {
+  min-width: 0;
 }
 
 .help-cmd {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .help-desc {
   display: block;
+  overflow-wrap: anywhere;
+}
+
+.blog-cover {
+  margin: 10px 0 12px;
+}
+
+.blog-cover a {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.blog-cover-image {
+  display: block;
+  max-width: min(100%, 540px);
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.blog-inline-image {
+  margin: 8px 0;
+}
+
+.blog-inline-image a {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.blog-inline-image img {
+  display: block;
+  max-width: min(100%, 540px);
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
 }
 
 body.reduced-motion *,
@@ -469,16 +519,16 @@ body.reduced-motion *::after {
   animation: helpGridIn 0.55s ease;
 }
 
-#terminal p.no-line-anim .help-card {
+#terminal .no-line-anim .help-card {
   opacity: 0;
   transform: translateY(6px);
   animation: helpCardIn 0.4s ease forwards;
 }
 
-#terminal p.no-line-anim .help-card:nth-child(1) { animation-delay: 0.04s; }
-#terminal p.no-line-anim .help-card:nth-child(2) { animation-delay: 0.1s; }
-#terminal p.no-line-anim .help-card:nth-child(3) { animation-delay: 0.16s; }
-#terminal p.no-line-anim .help-card:nth-child(4) { animation-delay: 0.22s; }
+#terminal .no-line-anim .help-card:nth-child(1) { animation-delay: 0.04s; }
+#terminal .no-line-anim .help-card:nth-child(2) { animation-delay: 0.1s; }
+#terminal .no-line-anim .help-card:nth-child(3) { animation-delay: 0.16s; }
+#terminal .no-line-anim .help-card:nth-child(4) { animation-delay: 0.22s; }
 
 @keyframes helpGridIn {
   from { opacity: 0; }
@@ -556,6 +606,10 @@ body.reduced-motion *::after {
   }
 
   .help-grid {
+    gap: 6px;
+  }
+
+  .help-row {
     grid-template-columns: 1fr;
     gap: 2px 0;
   }

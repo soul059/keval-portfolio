@@ -39,11 +39,6 @@ const helpObj = {
     ["'sound [on|off]'", "Toggle typing sound."],
     ["'prefs [export|reset]'", "Manage local storage preferences."],
     ["'su <admin-username>'", "Authenticate as seeded admin."],
-    ["'admin [whoami|logout|blogs|config|analytics]'", "Run admin-only commands."],
-    ["'admin blog-new [title]'", "Opens editor. Command mode: :edit <line>, :img <line> (file), :img <line> <url>, :cover."],
-    ["'admin blog-edit [id]'", "Edit by ID, or pick from list if omitted."],
-    ["'admin blog-view|blog-publish|blog-delete [id]'", "Manage by ID, or pick from selector list."],
-    ["'admin blog-select <edit|view|publish|delete>'", "Open linux-style selector list first."],
     ["'clear'", "Clear the terminal."],
     ["'sudo'", "Unlock hidden commands."],
     ["'ls'", "List directory contents."]
@@ -61,12 +56,11 @@ const sectionTitles: Record<HelpSection, string> = {
 };
 export const HELP_TYPES = ["discover", "navigate", "terminalos", "system"] as const;
 
-const createCommandSection = (title: string, commands: string[][], isAdmin: boolean): string => {
-  const visibleCommands = commands.filter(([cmd]) => isAdmin || !cmd.includes("'admin "));
-  const rows = visibleCommands
-    .map(([cmd, desc]) => `<span class='command help-cmd'>${cmd}</span><span class='help-desc'>${desc}</span>`)
+const createCommandSection = (title: string, commands: string[][], _isAdmin: boolean): string => {
+  const rows = commands
+    .map(([cmd, desc]) => `<div class='help-row'><span class='command help-cmd'>${cmd}</span><span class='help-desc'>${desc}</span></div>`)
     .join("");
-  return `<span class='help-card'><span class='keys help-title'>${title}</span><span class='help-grid'>${rows}</span></span>`;
+  return `<div class='help-card'><span class='keys help-title'>${title}</span><div class='help-grid'>${rows}</div></div>`;
 }
 
 export const createHelpAll = (isAdmin = false) : string[] => {
@@ -74,7 +68,7 @@ export const createHelpAll = (isAdmin = false) : string[] => {
   help.push("<br>")
   help.push("Quick start: <span class='cmd-chip' data-command='start'>start</span> <span class='cmd-chip' data-command='about'>about</span> <span class='cmd-chip' data-command='projects'>projects</span> <span class='cmd-chip' data-command='hire'>hire</span>");
   help.push("<br>");
-  help.push(`<span class='help-layout'>${sectionOrder.map((section) => createCommandSection(sectionTitles[section], helpObj[section], isAdmin)).join("")}</span>`);
+  help.push(`<div class='help-layout'>${sectionOrder.map((section) => createCommandSection(sectionTitles[section], helpObj[section], isAdmin)).join("")}</div>`);
 
   help.push("<br>");
   help.push("Help usage:");
@@ -111,7 +105,7 @@ export const createHelpByType = (type: string, isAdmin = false): string[] => {
 
   const help: string[] = [];
   help.push("<br>");
-  help.push(`<span class='help-layout'><span class='help-layout-single'>${createCommandSection(sectionTitles[section], helpObj[section], isAdmin)}</span></span>`);
+  help.push(`<div class='help-layout'><div class='help-layout-single'>${createCommandSection(sectionTitles[section], helpObj[section], isAdmin)}</div></div>`);
   help.push("<br>");
   return help;
 }

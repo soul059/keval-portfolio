@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { BlogModel } from "../models/Blog.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { escapeRegExp } from "../utils/regex.js";
 
 const router = Router();
 const listSchema = z.object({
@@ -14,11 +15,12 @@ const listSchema = z.object({
 function buildPublicFilter(query: z.infer<typeof listSchema>) {
   const filter: Record<string, unknown> = { status: "published" };
   if (query.search) {
+    const searchTerm = escapeRegExp(query.search);
     filter.$or = [
-      { title: { $regex: query.search, $options: "i" } },
-      { slug: { $regex: query.search, $options: "i" } },
-      { excerpt: { $regex: query.search, $options: "i" } },
-      { tags: { $regex: query.search, $options: "i" } }
+      { title: { $regex: searchTerm, $options: "i" } },
+      { slug: { $regex: searchTerm, $options: "i" } },
+      { excerpt: { $regex: searchTerm, $options: "i" } },
+      { tags: { $regex: searchTerm, $options: "i" } }
     ];
   }
   if (query.tag) {

@@ -1,4 +1,4 @@
-import command from '../config.json' assert {type: 'json'};
+import command from '../config.json';
 
 (() => {
   const style = document.createElement('style');

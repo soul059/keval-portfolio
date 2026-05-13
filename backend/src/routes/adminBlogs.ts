@@ -4,6 +4,7 @@ import { BlogModel } from "../models/Blog.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { requireAdmin, requireAuth } from "../middlewares/auth.js";
 import { writeAuditLog } from "../utils/audit.js";
+import { escapeRegExp } from "../utils/regex.js";
 
 const router = Router();
 
@@ -54,10 +55,11 @@ router.get(
     const filter: Record<string, unknown> = {};
     if (query.status) filter.status = query.status;
     if (query.search) {
+      const searchTerm = escapeRegExp(query.search);
       filter.$or = [
-        { title: { $regex: query.search, $options: "i" } },
-        { slug: { $regex: query.search, $options: "i" } },
-        { tags: { $regex: query.search, $options: "i" } }
+        { title: { $regex: searchTerm, $options: "i" } },
+        { slug: { $regex: searchTerm, $options: "i" } },
+        { tags: { $regex: searchTerm, $options: "i" } }
       ];
     }
     const skip = (query.page - 1) * query.limit;
