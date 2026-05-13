@@ -458,6 +458,22 @@ function hasEmbeddedImage(content: string) {
   return content.split("\n").some((line) => Boolean(parseMarkdownImageLine(line.trim())));
 }
 
+function stripLeadingBlogTitleLine(content: string, title: string) {
+  const lines = content.split("\n");
+  if (lines.length === 0) return lines;
+  const firstLine = lines[0].trim();
+  const normalizedTitle = title.trim();
+  const plainTitle = firstLine.replace(/^#{1,6}\s+/, "").trim();
+  if (firstLine === normalizedTitle || plainTitle === normalizedTitle) {
+    return lines.slice(1);
+  }
+  return lines;
+}
+
+function renderBlogHeading(title: string) {
+  return `<div class='blog-post-title'>${escapeHtml(title)}</div>`;
+}
+
 function insertCoverImageLine(img: { url: string; publicId: string }) {
   if (!blogDraft) return;
   const previousCoverUrl = blogDraft.coverImage?.url;
@@ -2033,12 +2049,12 @@ function commandHandler(input: string, options?: { bypassPendingBlogTitle?: bool
       void getAdminBlogById(id)
         .then((result) => writeLines([
           "<br>",
-          `Title: ${result.blog.title}`,
+          renderBlogHeading(result.blog.title),
           `Slug: ${result.blog.slug}`,
           `Status: ${result.blog.status}`,
           ...(!hasEmbeddedImage(result.blog.content ?? "") ? renderCoverImage(result.blog.coverImage?.url, result.blog.title) : []),
           result.blog.excerpt,
-          ...((result.blog.content ?? "").split("\n").slice(0, 40).map((line) => renderMarkdownLine(line))),
+          ...(stripLeadingBlogTitleLine(result.blog.content ?? "", result.blog.title).slice(0, 40).map((line) => renderMarkdownLine(line))),
           "<br>"
         ]))
         .catch((error: unknown) => writeLines([error instanceof Error ? error.message : "Failed to fetch blog.", "<br>"]));
@@ -2125,10 +2141,10 @@ function commandHandler(input: string, options?: { bypassPendingBlogTitle?: bool
       void getPublicBlogBySlug(slug)
         .then((data) => writeLines([
           "<br>",
-          data.blog.title,
+          renderBlogHeading(data.blog.title),
           ...(!hasEmbeddedImage(data.blog.content) ? renderCoverImage(data.blog.coverImage?.url, data.blog.title) : []),
           data.blog.excerpt,
-          ...(data.blog.content.split("\n").slice(0, 40).map((line) => renderMarkdownLine(line))),
+          ...(stripLeadingBlogTitleLine(data.blog.content, data.blog.title).slice(0, 40).map((line) => renderMarkdownLine(line))),
           "<br>"
         ]))
         .catch((error: unknown) => writeLines([error instanceof Error ? error.message : "Failed to fetch blog.", "<br>"]));

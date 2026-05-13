@@ -492,6 +492,15 @@ a:hover {
   border-radius: 6px;
 }
 
+.blog-post-title {
+  margin: 0 0 10px;
+  color: var(--text);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
 body.reduced-motion *,
 body.reduced-motion *::before,
 body.reduced-motion *::after {
