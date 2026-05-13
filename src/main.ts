@@ -2135,22 +2135,42 @@ function commandHandler(input: string, options?: { bypassPendingBlogTitle?: bool
     if (mode === "view") {
       const slug = args[1];
       if (!slug) {
-        writeLines(["Usage: <span class='command'>blog view <slug></span>", "<br>"]);
+        writeLines(["Usage: <span class='command'>blog view &lt;slug&gt;</span> — e.g. <span class='command'>blog view my-first-post</span>", "<br>"]);
         return;
       }
       void getPublicBlogBySlug(slug)
-        .then((data) => writeLines([
-          "<br>",
-          renderBlogHeading(data.blog.title),
-          ...(!hasEmbeddedImage(data.blog.content) ? renderCoverImage(data.blog.coverImage?.url, data.blog.title) : []),
-          data.blog.excerpt,
-          ...(stripLeadingBlogTitleLine(data.blog.content, data.blog.title).slice(0, 40).map((line) => renderMarkdownLine(line))),
-          "<br>"
-        ]))
+        .then((data) => {
+          // Render the full blog content immediately (no staggered animation)
+          try {
+            if (!mutWriteLines || !mutWriteLines.parentNode) {
+              writeLines(["Failed to render blog: terminal not ready.", "<br>"]);
+              return;
+            }
+            const container = document.createElement("div");
+            const parts: string[] = [];
+            parts.push("<br>");
+            parts.push(renderBlogHeading(data.blog.title));
+            if (!hasEmbeddedImage(data.blog.content)) {
+              parts.push(renderCoverImage(data.blog.coverImage?.url, data.blog.title).join(""));
+            }
+            if (data.blog.excerpt) parts.push(`<div class='blog-excerpt'>${escapeHtml(data.blog.excerpt)}</div>`);
+            const bodyLines = stripLeadingBlogTitleLine(data.blog.content, data.blog.title).map((line) => renderMarkdownLine(line));
+            parts.push("<div class='blog-body'>");
+            parts.push(...bodyLines);
+            parts.push("</div>");
+            parts.push("<br>");
+            container.classList.add("no-line-anim");
+            container.innerHTML = parts.join("");
+            mutWriteLines.parentNode.insertBefore(container, mutWriteLines);
+            scrollToBottom();
+          } catch (err) {
+            writeLines([err instanceof Error ? err.message : "Failed to render blog.", "<br>"]);
+          }
+        })
         .catch((error: unknown) => writeLines([error instanceof Error ? error.message : "Failed to fetch blog.", "<br>"]));
       return;
     }
-    writeLines(["Usage: <span class='command'>blog view <slug></span> | <span class='command'>blog search <query></span>", "<br>"]);
+    writeLines(["Usage: <span class='command'>blog view &lt;slug&gt;</span> | <span class='command'>blog search &lt;query&gt;</span> — e.g. <span class='command'>blog view my-first-post</span>", "<br>"]);
     return;
   }
 
