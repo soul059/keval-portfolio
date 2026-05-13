@@ -523,6 +523,11 @@ function playKeySound() {
   if (!audioCtx) {
     audioCtx = new AudioContextRef();
   }
+  if (audioCtx.state === "suspended") {
+    void audioCtx.resume().catch(() => {
+      // Ignore resume failures and fall back to the next user gesture.
+    });
+  }
   const oscillator = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
   oscillator.type = "square";
