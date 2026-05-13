@@ -15,7 +15,7 @@
   "password": "keval",
   "repoLink": "https://github.com/soul059/keval-portfolio",
   "backend": {
-    "apiBaseUrl": "http://localhost:4000"
+    "apiBaseUrl": "https://keval-portfolio-kk8s.onrender.com"
   },
   "social": {
     "email": "keval.s.chauhan.1@gmail.com",
